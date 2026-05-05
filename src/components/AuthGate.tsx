@@ -18,9 +18,46 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       <div className="min-h-screen flex-1 flex items-center justify-center bg-gradient-to-b from-slate-50 via-sky-50 to-white px-6">
         <div className="max-w-sm w-full text-center">
           <div className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Milestride</div>
-          <p className="text-sm text-gray-500 mb-8">
+          <p className="text-sm text-gray-500 mb-6">
             読書 → 応用設計 → 実戦 のループを<br />ロードマップで見える化
           </p>
+
+          <div className="mb-8 rounded-2xl bg-white ring-1 ring-gray-200 shadow-sm px-5 py-5 text-left">
+            <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-3 text-center">
+              例: 影響力の武器
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <div className="w-[200px] rounded-2xl ring-2 ring-emerald-400 bg-gradient-to-br from-emerald-50 to-emerald-100 px-3 py-2.5 shadow-sm">
+                <div className="text-[9px] font-bold uppercase tracking-wide text-sky-700">
+                  読書
+                </div>
+                <div className="text-xs font-semibold text-gray-900 mt-0.5">
+                  <span className="text-emerald-500 mr-1">✓</span>
+                  返報性の原理を読む
+                </div>
+                <div className="mt-1.5 h-1 w-full rounded-full bg-white/70 overflow-hidden">
+                  <div className="h-full w-full bg-emerald-400" />
+                </div>
+              </div>
+              <div className="h-5 w-px bg-gradient-to-b from-emerald-300 to-amber-300" />
+              <div className="w-[200px] rounded-2xl ring-2 ring-amber-400 bg-gradient-to-br from-amber-50 to-orange-100 px-3 py-2.5 shadow-sm">
+                <div className="text-[9px] font-bold uppercase tracking-wide text-amber-700">
+                  応用設計
+                </div>
+                <div className="text-xs font-semibold text-gray-900 mt-0.5">
+                  <span className="text-amber-500 mr-1">◐</span>
+                  顧客提案で先に価値提供
+                </div>
+                <div className="mt-1.5 h-1 w-full rounded-full bg-white/70 overflow-hidden">
+                  <div className="h-full w-1/2 bg-amber-400" />
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 text-[10px] text-gray-400 text-center leading-snug">
+              読んだ内容を実務で試す流れを<br />一つずつチェックして進めます
+            </div>
+          </div>
+
           <button
             onClick={() => signInGoogle().catch(console.error)}
             className="w-full py-3 px-5 rounded-2xl bg-white border border-gray-200 shadow-sm font-medium text-gray-800 active:scale-[0.98] transition flex items-center justify-center gap-2.5"

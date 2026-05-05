@@ -18,6 +18,7 @@ import AuthGate from "@/components/AuthGate";
 import NodeSheet from "@/components/NodeSheet";
 import ActionMenu from "@/components/ActionMenu";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import RenameDialog from "@/components/RenameDialog";
 import NodeEditor, { NodeDraft } from "@/components/NodeEditor";
 import UnifiedField from "@/components/UnifiedField";
 
@@ -51,6 +52,15 @@ function App() {
     presetGroupId?: string | null;
   } | null>(null);
   const [confirmDel, setConfirmDel] = useState<Node | null>(null);
+  const [renameTarget, setRenameTarget] = useState<
+    { id: string; current: string } | null
+  >(null);
+  const [groupMenu, setGroupMenu] = useState<
+    { id: string; title: string } | null
+  >(null);
+  const [confirmDelGroup, setConfirmDelGroup] = useState<
+    { id: string; title: string } | null
+  >(null);
 
   const tabs = useMemo<{ id: string; title: string; nodes: Node[] }[]>(() => {
     const ungrouped = nodes.filter((n) => !n.groupId);
@@ -159,6 +169,15 @@ function App() {
                     showGroupChips: false,
                   })
                 }
+                onRenameGroup={(id, current) => {
+                  const tab = tabs.find((t) => t.id === id);
+                  const empty = (tab?.nodes.length ?? 0) === 0;
+                  if (id !== UNGROUPED && empty) {
+                    setGroupMenu({ id, title: current });
+                  } else {
+                    setRenameTarget({ id, current });
+                  }
+                }}
               />
             )}
             <FocusView
@@ -272,6 +291,62 @@ function App() {
         cancelLabel="削除しない"
         onConfirm={handleDelete}
         onCancel={() => setConfirmDel(null)}
+      />
+
+      <RenameDialog
+        open={!!renameTarget}
+        title="グループ名を編集"
+        initialValue={renameTarget?.current ?? ""}
+        placeholder="グループ名"
+        onCancel={() => setRenameTarget(null)}
+        onConfirm={async (next) => {
+          if (!renameTarget) return;
+          const id = renameTarget.id;
+          if (id === UNGROUPED) {
+            const newId = await ops.addGroup(next);
+            const ungroupedNodes = nodes.filter((n) => !n.groupId);
+            await Promise.all(
+              ungroupedNodes.map((n) => ops.updateNode(n.id, { groupId: newId }))
+            );
+            setActiveTab(newId);
+          } else if (next !== renameTarget.current) {
+            await ops.updateGroup(id, { title: next });
+          }
+          setRenameTarget(null);
+        }}
+      />
+
+      <ActionMenu
+        open={!!groupMenu}
+        title={groupMenu?.title ?? ""}
+        editLabel="✎ 名前変更"
+        deleteLabel="🗑 グループ削除"
+        onClose={() => setGroupMenu(null)}
+        onEdit={() => {
+          if (!groupMenu) return;
+          setRenameTarget({ id: groupMenu.id, current: groupMenu.title });
+          setGroupMenu(null);
+        }}
+        onDelete={() => {
+          if (!groupMenu) return;
+          setConfirmDelGroup({ id: groupMenu.id, title: groupMenu.title });
+          setGroupMenu(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!confirmDelGroup}
+        title="本当に削除して良いですか？"
+        message={confirmDelGroup?.title}
+        confirmLabel="削除する"
+        cancelLabel="削除しない"
+        onConfirm={async () => {
+          if (!confirmDelGroup) return;
+          await ops.deleteGroup(confirmDelGroup.id, nodes);
+          if (activeTab === confirmDelGroup.id) setActiveTab(UNGROUPED);
+          setConfirmDelGroup(null);
+        }}
+        onCancel={() => setConfirmDelGroup(null)}
       />
     </div>
   );
@@ -387,7 +462,7 @@ function OverviewSubToggle({
   setLayout: (l: OverviewLayout) => void;
 }) {
   return (
-    <div className="relative inline-flex bg-white ring-1 ring-gray-200 rounded-full p-0.5 shadow-sm text-[11px]">
+    <div className="relative inline-flex bg-white ring-1 ring-gray-200 rounded-full p-0.5 shadow-sm text-[13px]">
       {(["grouped", "unified"] as const).map((l) => (
         <button
           key={l}
@@ -409,12 +484,14 @@ function ChainTabs({
   onChange,
   allNodes,
   onAddGroup,
+  onRenameGroup,
 }: {
   tabs: { id: string; title: string; nodes: Node[] }[];
   activeId: string;
   onChange: (id: string) => void;
   allNodes: Node[];
   onAddGroup: () => void;
+  onRenameGroup: (id: string, currentTitle: string) => void;
 }) {
   return (
     <div className="px-4 pt-2">
@@ -423,24 +500,15 @@ function ChainTabs({
           const p = progress(t.nodes);
           const active = t.id === activeId;
           return (
-            <button
+            <ChainTab
               key={t.id}
-              onClick={() => onChange(t.id)}
-              className={`flex-none px-3 py-1.5 rounded-full text-xs font-medium ring-1 transition ${
-                active
-                  ? "bg-slate-900 text-white ring-slate-900"
-                  : "bg-white text-gray-700 ring-gray-200 active:bg-gray-50"
-              }`}
-            >
-              {t.title}
-              <span
-                className={`ml-2 tabular-nums ${
-                  active ? "text-emerald-300" : "text-gray-400"
-                }`}
-              >
-                {p.pct}%
-              </span>
-            </button>
+              id={t.id}
+              title={t.title}
+              pct={p.pct}
+              active={active}
+              onTap={() => onChange(t.id)}
+              onLongPress={() => onRenameGroup(t.id, t.title)}
+            />
           );
         })}
         <button
@@ -453,6 +521,46 @@ function ChainTabs({
       </div>
       <span className="hidden">{allNodes.length}</span>
     </div>
+  );
+}
+
+function ChainTab({
+  title,
+  pct,
+  active,
+  onTap,
+  onLongPress,
+}: {
+  id: string;
+  title: string;
+  pct: number;
+  active: boolean;
+  onTap: () => void;
+  onLongPress?: () => void;
+}) {
+  const lp = useLongPress({
+    onTap,
+    onLongPress: onLongPress ?? (() => {}),
+  });
+  const props = onLongPress ? lp : { onClick: onTap };
+  return (
+    <button
+      {...props}
+      className={`flex-none px-3 py-1.5 rounded-full text-xs font-medium ring-1 transition ${
+        active
+          ? "bg-slate-900 text-white ring-slate-900"
+          : "bg-white text-gray-700 ring-gray-200 active:bg-gray-50"
+      }`}
+    >
+      {title}
+      <span
+        className={`ml-2 tabular-nums ${
+          active ? "text-emerald-300" : "text-gray-400"
+        }`}
+      >
+        {pct}%
+      </span>
+    </button>
   );
 }
 
@@ -822,7 +930,7 @@ function OverviewView({
   return (
     <main className="px-4 pt-4">
       <div className="max-w-md mx-auto">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           {tabs.map((t) => {
             const p = progress(t.nodes);
             return (
@@ -836,7 +944,7 @@ function OverviewView({
                 }}
                 className="rounded-2xl bg-white ring-1 ring-gray-200 p-2.5 shadow-sm cursor-pointer active:scale-[0.98] active:bg-gray-50 transition"
               >
-                <div className="text-[10px] font-bold text-gray-800 leading-tight line-clamp-2 min-h-[28px]">
+                <div className="text-[14px] font-bold text-gray-800 leading-tight line-clamp-1">
                   {t.title}
                 </div>
                 <div className="mt-1.5 h-1 w-full rounded-full bg-gray-100 overflow-hidden">
@@ -845,7 +953,7 @@ function OverviewView({
                     style={{ width: `${p.pct}%` }}
                   />
                 </div>
-                <div className="text-[9px] text-gray-400 mt-1 tabular-nums">{p.pct}%</div>
+                <div className="text-[13px] text-gray-400 mt-1 tabular-nums">{p.pct}%</div>
                 <div className="mt-2 space-y-1.5">
                   {t.nodes.map((n, i) => (
                     <MiniNode
@@ -908,9 +1016,9 @@ function MiniNode({
         {isDone ? "✓" : isProg ? "◐" : locked ? "🔒" : idx + 1}
       </div>
       <div className="flex-1 min-w-0">
-        <div className={`text-[9px] ${p.color} font-semibold`}>{p.label}</div>
+        <div className={`text-[13px] ${p.color} font-semibold`}>{p.label}</div>
         <div
-          className={`text-[10px] leading-tight truncate ${
+          className={`text-[14px] leading-tight truncate ${
             locked ? "text-slate-400" : "text-gray-800"
           }`}
         >

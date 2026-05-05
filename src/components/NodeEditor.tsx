@@ -129,7 +129,7 @@ export default function NodeEditor({
             onClick={onCancel}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-[55] rounded-t-3xl bg-white shadow-2xl max-h-[92vh] overflow-y-auto"
+            className="fixed inset-x-0 bottom-0 z-[55] rounded-t-3xl bg-white shadow-2xl max-h-[85dvh] overflow-y-auto overscroll-contain"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}

@@ -7,12 +7,16 @@ export default function ActionMenu({
   onClose,
   onEdit,
   onDelete,
+  editLabel = "✎ 編集",
+  deleteLabel = "🗑 削除",
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  editLabel?: string;
+  deleteLabel?: string;
 }) {
   return (
     <AnimatePresence>
@@ -42,13 +46,13 @@ export default function ActionMenu({
                   onClick={onEdit}
                   className="w-full px-5 py-4 text-left text-sm font-medium text-gray-800 active:bg-gray-50 border-b border-gray-100"
                 >
-                  ✎ 編集
+                  {editLabel}
                 </button>
                 <button
                   onClick={onDelete}
                   className="w-full px-5 py-4 text-left text-sm font-medium text-red-600 active:bg-red-50"
                 >
-                  🗑 削除
+                  {deleteLabel}
                 </button>
               </div>
               <button
