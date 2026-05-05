@@ -14,7 +14,6 @@ import "reactflow/dist/style.css";
 import {
   Node,
   Group,
-  phaseMeta,
   checklistProgress,
   isLocked,
 } from "@/lib/store";
@@ -109,7 +108,6 @@ type CustomData = {
 
 function FieldNode({ data }: NodeProps<CustomData>) {
   const n = data.node;
-  const p = phaseMeta[n.phase];
   const cp = checklistProgress(n);
   const isDone = n.status === "done";
   const isProg = n.status === "in_progress";
@@ -139,18 +137,11 @@ function FieldNode({ data }: NodeProps<CustomData>) {
             : data.groupColor
         }`}
       >
-        <div className="flex items-center gap-1 mb-1">
-          <span
-            className={`text-[9px] font-bold uppercase tracking-wide ${p.color}`}
-          >
-            {p.label}
-          </span>
-          {data.groupTitle && (
-            <span className="text-[9px] text-gray-400 truncate">
-              · {data.groupTitle}
-            </span>
-          )}
-        </div>
+        {data.groupTitle && (
+          <div className="text-[9px] text-gray-400 truncate mb-1">
+            {data.groupTitle}
+          </div>
+        )}
         <div
           className={`text-xs font-semibold leading-tight ${
             locked ? "text-slate-400" : "text-gray-900"

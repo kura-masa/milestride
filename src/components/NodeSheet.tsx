@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Node, ChecklistItem, phaseMeta, checklistProgress } from "@/lib/store";
+import { Node, ChecklistItem, checklistProgress } from "@/lib/store";
 
 export default function NodeSheet({
   node,
@@ -19,7 +19,6 @@ export default function NodeSheet({
   }, [node?.id, node?.checklist]);
 
   if (!node) return null;
-  const p = phaseMeta[node.phase];
   const total = localChecklist.length;
   const done = localChecklist.filter((c) => c.done).length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
@@ -53,11 +52,6 @@ export default function NodeSheet({
               <div className="mx-auto h-1.5 w-10 rounded-full bg-gray-300" />
             </div>
             <div className="p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${p.bg} ${p.color}`}>
-                  {p.label}
-                </span>
-              </div>
               <h2 className="text-xl font-bold text-gray-900">{node.title}</h2>
               {node.summary && <p className="text-sm text-gray-600">{node.summary}</p>}
               {node.detail && (

@@ -6,7 +6,6 @@ import {
   useMutations,
   Node,
   Group,
-  phaseMeta,
   checklistProgress,
   isLocked,
   progress,
@@ -766,7 +765,6 @@ function PathNode({
   onTap: () => void;
   onLongPress: () => void;
 }) {
-  const p = phaseMeta[n.phase];
   const isDone = n.status === "done";
   const isProg = n.status === "in_progress";
   const locked = isLocked(n, allNodes);
@@ -891,9 +889,6 @@ function PathNode({
             </div>
           </div>
           <div className="text-center mt-2 px-1 w-full">
-            <div className={`text-[10px] font-semibold tracking-wide ${p.color}`}>
-              {p.label}
-            </div>
             <div
               className={`text-xs font-semibold leading-tight ${
                 locked ? "text-slate-400" : "text-gray-800"
@@ -988,7 +983,6 @@ function MiniNode({
   allNodes: Node[];
   onPick: (e: React.MouseEvent) => void;
 }) {
-  const p = phaseMeta[n.phase];
   const cp = checklistProgress(n);
   const isDone = n.status === "done";
   const isProg = n.status === "in_progress";
@@ -1016,7 +1010,6 @@ function MiniNode({
         {isDone ? "✓" : isProg ? "◐" : locked ? "🔒" : idx + 1}
       </div>
       <div className="flex-1 min-w-0">
-        <div className={`text-[13px] ${p.color} font-semibold`}>{p.label}</div>
         <div
           className={`text-[14px] leading-tight truncate ${
             locked ? "text-slate-400" : "text-gray-800"

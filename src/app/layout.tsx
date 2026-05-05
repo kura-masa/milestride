@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Milestride",
-  description: "読書 → FDE応用設計 → 実戦 のループを見える化",
+  description: "やりたいことをロードマップで見える化して進めるアプリ",
 };
 
 export const viewport = {

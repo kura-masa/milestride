@@ -18,14 +18,12 @@ import {
 import { getFirebase } from "./firebase";
 import { useAuth } from "./auth";
 
-export type Phase = "read" | "design" | "apply";
 export type Status = "done" | "in_progress" | "todo";
 export type ChecklistItem = { id: string; label: string; done: boolean };
 
 export type Node = {
   id: string;
   title: string;
-  phase: Phase;
   status: Status;
   summary: string;
   detail: string;
@@ -118,7 +116,6 @@ export function useMutations() {
       ) => {
         const ref = await addDoc(nodesCol, {
           title: input.title,
-          phase: input.phase ?? "read",
           status: input.status ?? "todo",
           summary: input.summary ?? "",
           detail: input.detail ?? "",
@@ -257,8 +254,3 @@ export function isLocked(n: Node, all: Node[]): boolean {
   return !n.parents.every((pid) => all.find((x) => x.id === pid)?.status === "done");
 }
 
-export const phaseMeta: Record<Phase, { label: string; color: string; bg: string; ring: string }> = {
-  read: { label: "読書", color: "text-sky-700", bg: "bg-sky-100", ring: "ring-sky-400" },
-  design: { label: "応用設計", color: "text-amber-700", bg: "bg-amber-100", ring: "ring-amber-400" },
-  apply: { label: "実戦", color: "text-emerald-700", bg: "bg-emerald-100", ring: "ring-emerald-400" },
-};

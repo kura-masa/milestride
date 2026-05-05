@@ -19,7 +19,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         <div className="max-w-sm w-full text-center">
           <div className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Milestride</div>
           <p className="text-sm text-gray-500 mb-6">
-            読書 → 応用設計 → 実戦 のループを<br />ロードマップで見える化
+            やりたいことをロードマップで<br />見える化して進めるアプリ
           </p>
 
           <div className="mb-8 rounded-2xl bg-white ring-1 ring-gray-200 shadow-sm px-5 py-5 text-left">
@@ -28,10 +28,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             </div>
             <div className="flex flex-col items-center gap-1">
               <div className="w-[200px] rounded-2xl ring-2 ring-emerald-400 bg-gradient-to-br from-emerald-50 to-emerald-100 px-3 py-2.5 shadow-sm">
-                <div className="text-[9px] font-bold uppercase tracking-wide text-sky-700">
-                  読書
-                </div>
-                <div className="text-xs font-semibold text-gray-900 mt-0.5">
+                <div className="text-xs font-semibold text-gray-900">
                   <span className="text-emerald-500 mr-1">✓</span>
                   返報性の原理を読む
                 </div>
@@ -41,10 +38,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
               </div>
               <div className="h-5 w-px bg-gradient-to-b from-emerald-300 to-amber-300" />
               <div className="w-[200px] rounded-2xl ring-2 ring-amber-400 bg-gradient-to-br from-amber-50 to-orange-100 px-3 py-2.5 shadow-sm">
-                <div className="text-[9px] font-bold uppercase tracking-wide text-amber-700">
-                  応用設計
-                </div>
-                <div className="text-xs font-semibold text-gray-900 mt-0.5">
+                <div className="text-xs font-semibold text-gray-900">
                   <span className="text-amber-500 mr-1">◐</span>
                   顧客提案で先に価値提供
                 </div>

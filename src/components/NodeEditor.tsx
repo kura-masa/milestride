@@ -1,11 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Node, Group, Phase, Status, ChecklistItem, phaseMeta } from "@/lib/store";
+import { Node, Group, Status, ChecklistItem } from "@/lib/store";
 
 export type NodeDraft = {
   title: string;
-  phase: Phase;
   status: Status;
   summary: string;
   detail: string;
@@ -142,9 +141,6 @@ export default function NodeEditor({
               >
                 キャンセル
               </button>
-              <div className="text-sm font-semibold text-gray-900">
-                {isNew ? "新規ノード" : "ノード編集"}
-              </div>
               <button
                 onClick={handleSave}
                 disabled={saving || !draft.title.trim()}
@@ -187,19 +183,6 @@ export default function NodeEditor({
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                   placeholder="例: 返報性の原理を読む"
                   autoFocus={isNew && !requireNewGroup}
-                />
-              </Field>
-
-              <Field label="フェーズ">
-                <SegmentedSelect<Phase>
-                  value={draft.phase}
-                  options={[
-                    { v: "read", label: "読書" },
-                    { v: "design", label: "設計" },
-                    { v: "apply", label: "実戦" },
-                  ]}
-                  onChange={(v) => setDraft({ ...draft, phase: v })}
-                  accentByValue={(v) => phaseMeta[v].bg + " " + phaseMeta[v].color}
                 />
               </Field>
 
@@ -290,9 +273,6 @@ export default function NodeEditor({
                         active={draft.parents.includes(n.id)}
                         onClick={() => toggleParent(n.id)}
                       >
-                        <span className={`text-[9px] mr-1 ${phaseMeta[n.phase].color}`}>
-                          {phaseMeta[n.phase].label}
-                        </span>
                         {n.title}
                       </Chip>
                     ))}
@@ -351,7 +331,6 @@ export default function NodeEditor({
 function normalize(initial: Partial<NodeDraft>): NodeDraft {
   return {
     title: initial.title ?? "",
-    phase: initial.phase ?? "read",
     status: initial.status ?? "todo",
     summary: initial.summary ?? "",
     detail: initial.detail ?? "",
@@ -404,36 +383,3 @@ function Chip({
   );
 }
 
-function SegmentedSelect<T extends string>({
-  value,
-  options,
-  onChange,
-  accentByValue,
-}: {
-  value: T;
-  options: { v: T; label: string }[];
-  onChange: (v: T) => void;
-  accentByValue?: (v: T) => string;
-}) {
-  return (
-    <div className="flex bg-gray-100 rounded-xl p-1">
-      {options.map((o) => {
-        const active = o.v === value;
-        const accent = active && accentByValue ? accentByValue(o.v) : "";
-        return (
-          <button
-            key={o.v}
-            onClick={() => onChange(o.v)}
-            className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition ${
-              active
-                ? accent || "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500"
-            }`}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
