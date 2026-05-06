@@ -41,6 +41,8 @@ function InlineCheckView({ node, updateAttributes }: NodeViewProps) {
       >
         {checked ? "✓" : ""}
       </span>
+      {/* `as="span"` is valid at runtime but Tiptap's React types narrow it to "div" */}
+      {/* @ts-expect-error tiptap NodeViewContent `as` typing is too strict */}
       <NodeViewContent as="span" className="inline-check-label" />
     </NodeViewWrapper>
   );
