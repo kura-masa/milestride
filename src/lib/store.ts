@@ -198,6 +198,14 @@ export function useMutations() {
           updatedAt: serverTimestamp(),
         });
       },
+      saveMemo: async (nodeId: string, memo: string) => {
+        const status = deriveStatusFromMemo(memo);
+        await updateDoc(doc(db, userPath(uid, "nodes", nodeId)), {
+          memo,
+          status,
+          updatedAt: serverTimestamp(),
+        });
+      },
       addGroup: async (title: string, order = Date.now()) => {
         const ref = await addDoc(groupsCol, {
           title,
@@ -253,11 +261,53 @@ export function useMutations() {
   return ops;
 }
 
+const CHECKLIST_LINE_RE = /^(\s*)- \[( |x|X)\] (.*)$/;
+
+export type MemoChecklistItem = {
+  lineIdx: number;
+  label: string;
+  done: boolean;
+};
+
+export function parseMemoChecklist(memo: string | undefined): MemoChecklistItem[] {
+  if (!memo) return [];
+  const items: MemoChecklistItem[] = [];
+  memo.split("\n").forEach((line, i) => {
+    const m = CHECKLIST_LINE_RE.exec(line);
+    if (m) items.push({ lineIdx: i, label: m[3], done: m[2].toLowerCase() === "x" });
+  });
+  return items;
+}
+
+export function toggleMemoChecklistAt(memo: string, lineIdx: number): string {
+  const lines = memo.split("\n");
+  const line = lines[lineIdx];
+  if (line == null) return memo;
+  lines[lineIdx] = line.replace(
+    CHECKLIST_LINE_RE,
+    (_full, sp: string, mark: string, rest: string) =>
+      `${sp}- [${mark.toLowerCase() === "x" ? " " : "x"}] ${rest}`
+  );
+  return lines.join("\n");
+}
+
+export function deriveStatusFromMemo(
+  memo: string | undefined,
+  fallback: Status = "todo"
+): Status {
+  const items = parseMemoChecklist(memo);
+  if (items.length === 0) return fallback;
+  const doneCount = items.filter((i) => i.done).length;
+  if (doneCount === items.length) return "done";
+  if (doneCount > 0) return "in_progress";
+  return "todo";
+}
+
 export function nodeProgress(n: Node): number {
   if (n.status === "done") return 1;
-  const cl = n.checklist ?? [];
-  if (cl.length > 0) {
-    return cl.filter((c) => c.done).length / cl.length;
+  const items = parseMemoChecklist(n.memo);
+  if (items.length > 0) {
+    return items.filter((i) => i.done).length / items.length;
   }
   return n.status === "in_progress" ? 0.5 : 0;
 }
@@ -272,8 +322,9 @@ export function progress(ns: Node[]) {
 }
 
 export function checklistProgress(n: Node) {
-  const t = n.checklist?.length ?? 0;
-  const d = n.checklist?.filter((c) => c.done).length ?? 0;
+  const items = parseMemoChecklist(n.memo);
+  const t = items.length;
+  const d = items.filter((i) => i.done).length;
   return { total: t, done: d, pct: t === 0 ? 0 : Math.round((d / t) * 100) };
 }
 

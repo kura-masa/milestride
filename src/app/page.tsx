@@ -104,38 +104,27 @@ function App() {
         const gid = await ops.addGroup("はじめてのロードマップ");
         const id1 = await ops.addNode({
           title: "アプリの使い方を確認する",
-          detail: "Milestrideでできることを把握する",
+          memo: "Milestrideでできることを把握する\n- [x] サンプルを眺める",
           groupId: gid,
           parents: [],
           order: 1,
           status: "done",
-          checklist: [
-            { id: ops.newChecklistId(), label: "サンプルを眺める", done: true },
-          ],
         });
         const id2 = await ops.addNode({
           title: "やりたいことを1つ書く",
-          detail: "達成したい目的を1行で表現する",
+          memo: "達成したいことをメモに書く\n- [x] 何をやりたいか決める\n- [ ] メモに背景を書く",
           groupId: gid,
           parents: [id1],
           order: 2,
           status: "in_progress",
-          checklist: [
-            { id: ops.newChecklistId(), label: "目的を決める", done: true },
-            { id: ops.newChecklistId(), label: "メモに背景を書く", done: false },
-          ],
         });
         await ops.addNode({
           title: "行動してチェックを入れる",
-          detail: "小さく動いて進捗を可視化する",
+          memo: "小さく動いて進捗を可視化する\n- [ ] 今日の一歩を実行\n- [ ] 気づきをメモに残す",
           groupId: gid,
           parents: [id2],
           order: 3,
           status: "todo",
-          checklist: [
-            { id: ops.newChecklistId(), label: "今日の一歩を実行", done: false },
-            { id: ops.newChecklistId(), label: "気づきをメモに残す", done: false },
-          ],
         });
         localStorage.setItem(key, "1");
         setActiveTab(gid);
@@ -301,8 +290,7 @@ function App() {
       <NodeSheet
         node={sheet}
         onClose={() => setSheet(null)}
-        onSaveChecklist={(n, items) => ops.replaceChecklist(n.id, items)}
-        onSaveMemo={(n, memo) => ops.updateNode(n.id, { memo })}
+        onSaveMemo={(n, memo) => ops.saveMemo(n.id, memo)}
       />
 
       <ActionMenu
@@ -331,7 +319,6 @@ function App() {
           const id = await ops.addGroup(title);
           return id;
         }}
-        newChecklistId={ops.newChecklistId}
       />
 
       <ConfirmDialog

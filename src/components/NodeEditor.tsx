@@ -1,16 +1,15 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { flushSync } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Node, Status, ChecklistItem } from "@/lib/store";
+import { Node, Status } from "@/lib/store";
+import { MemoEditor, MemoEditorHandle } from "./MemoEditor";
 
 export type NodeDraft = {
   title: string;
   status: Status;
-  detail: string;
   groupId: string | null;
   parents: string[];
-  checklist: ChecklistItem[];
+  memo: string;
 };
 
 export default function NodeEditor({
@@ -22,7 +21,6 @@ export default function NodeEditor({
   onSave,
   onCancel,
   onAddGroup,
-  newChecklistId,
 }: {
   open: boolean;
   initial: Partial<NodeDraft> & { id?: string };
@@ -32,7 +30,6 @@ export default function NodeEditor({
   onSave: (draft: NodeDraft) => Promise<void> | void;
   onCancel: () => void;
   onAddGroup: (title: string) => Promise<string>;
-  newChecklistId: () => string;
 }) {
   const [draft, setDraft] = useState<NodeDraft>(() => normalize(initial));
   const [saving, setSaving] = useState(false);
@@ -49,27 +46,7 @@ export default function NodeEditor({
 
   const otherNodes = allNodes.filter((n) => n.id !== initial.id);
 
-  const checklistInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
-
-  const addChecklist = () => {
-    const id = newChecklistId();
-    flushSync(() => {
-      setDraft((d) => ({
-        ...d,
-        checklist: [...d.checklist, { id, label: "", done: false }],
-      }));
-    });
-    checklistInputRefs.current.get(id)?.focus();
-  };
-
-  const updateChecklist = (id: string, patch: Partial<ChecklistItem>) =>
-    setDraft((d) => ({
-      ...d,
-      checklist: d.checklist.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-    }));
-
-  const removeChecklist = (id: string) =>
-    setDraft((d) => ({ ...d, checklist: d.checklist.filter((c) => c.id !== id) }));
+  const memoEditorRef = useRef<MemoEditorHandle>(null);
 
   const toggleParent = (pid: string) =>
     setDraft((d) => ({
@@ -94,13 +71,7 @@ export default function NodeEditor({
       if (requireNewGroup) {
         groupId = await onAddGroup(groupNameAtTop.trim());
       }
-      const cleaned: NodeDraft = {
-        ...draft,
-        groupId,
-        checklist: draft.checklist
-          .map((c) => ({ ...c, label: c.label.trim() }))
-          .filter((c) => c.label),
-      };
+      const cleaned: NodeDraft = { ...draft, groupId };
       await onSave(cleaned);
     } finally {
       setSaving(false);
@@ -176,20 +147,6 @@ export default function NodeEditor({
                 />
               </Field>
 
-              <Field label="目的">
-                <input
-                  className="w-full px-3 py-2.5 rounded-xl bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none text-sm"
-                  value={draft.detail}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      detail: e.target.value.replace(/\r?\n/g, ""),
-                    })
-                  }
-                  placeholder="このノードで達成したいこと"
-                />
-              </Field>
-
               <Field
                 label="親ノード（依存）"
                 hint="完了が必要な前提ノード。複数選択可"
@@ -211,47 +168,25 @@ export default function NodeEditor({
                 )}
               </Field>
 
-              <Field label="チェックリスト">
-                <div className="space-y-2">
-                  {draft.checklist.map((c) => (
-                    <div key={c.id} className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateChecklist(c.id, { done: !c.done })}
-                        className={`flex-none w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] ${
-                          c.done
-                            ? "bg-emerald-400 border-emerald-400 text-white"
-                            : "border-gray-300"
-                        }`}
-                      >
-                        {c.done && "✓"}
-                      </button>
-                      <input
-                        ref={(el) => {
-                          if (el) checklistInputRefs.current.set(c.id, el);
-                          else checklistInputRefs.current.delete(c.id);
-                        }}
-                        className="flex-1 px-2.5 py-1.5 rounded-lg bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none text-sm"
-                        value={c.label}
-                        onChange={(e) =>
-                          updateChecklist(c.id, { label: e.target.value })
-                        }
-                        placeholder="項目"
-                      />
-                      <button
-                        onClick={() => removeChecklist(c.id)}
-                        className="flex-none w-7 h-7 rounded-full text-gray-400 active:bg-gray-100"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+              <Field
+                label="メモ"
+                rightSlot={
                   <button
-                    onClick={addChecklist}
-                    className="w-full py-2 rounded-lg border border-dashed border-gray-300 text-xs text-gray-500 active:bg-gray-50"
+                    type="button"
+                    onClick={() => memoEditorRef.current?.addItem()}
+                    className="px-3 py-1 rounded-full text-xs font-semibold text-sky-600 ring-1 ring-sky-200 active:bg-sky-50"
                   >
                     ＋ 項目を追加
                   </button>
-                </div>
+                }
+              >
+                <MemoEditor
+                  ref={memoEditorRef}
+                  initialValue={initial.memo ?? ""}
+                  resetKey={`${initial.id ?? "new"}-${open ? "open" : "closed"}`}
+                  onChange={(memo) => setDraft((d) => ({ ...d, memo }))}
+                  placeholder="このノードのメモ"
+                />
               </Field>
 
               <div className="h-4" />
@@ -267,27 +202,32 @@ function normalize(initial: Partial<NodeDraft>): NodeDraft {
   return {
     title: initial.title ?? "",
     status: initial.status ?? "todo",
-    detail: initial.detail ?? "",
     groupId: initial.groupId ?? null,
     parents: initial.parents ?? [],
-    checklist: initial.checklist ?? [],
+    memo: initial.memo ?? "",
   };
 }
 
 function Field({
   label,
   hint,
+  rightSlot,
   children,
 }: {
   label: string;
   hint?: string;
+  rightSlot?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-1.5">
+      <div className="flex items-center justify-between mb-1.5">
         <label className="text-xs font-semibold text-gray-700">{label}</label>
-        {hint && <span className="text-[10px] text-gray-400">{hint}</span>}
+        {rightSlot ? (
+          rightSlot
+        ) : hint ? (
+          <span className="text-[10px] text-gray-400">{hint}</span>
+        ) : null}
       </div>
       {children}
     </div>
