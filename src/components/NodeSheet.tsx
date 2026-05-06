@@ -58,65 +58,105 @@ export default function NodeSheet({
     }
   };
 
-  const handleToggleLine = (lineIdx: number) => {
+  const handleToggleAt = (markerStart: number) => {
     setDisplayMemo((prev) => {
       if (!node) return prev;
-      const next = toggleMemoChecklistAt(prev, lineIdx);
+      const next = toggleMemoChecklistAt(prev, markerStart);
       onSaveMemo(node, next);
       return next;
     });
   };
 
-  // Render memo line-by-line: check items as chip rows, others as prose text
+  // Render memo as paragraphs with inline check chips
   const renderMemo = () => {
     const memo = displayMemo;
-    const checkLineRe = /^[ \t]*(?:- )?\[( |x|X)\][ \t]?(.*)$/;
-    return memo.split("\n").map((line, idx) => {
-      const m = checkLineRe.exec(line);
-      if (m) {
+    const inlineRe = /\[( |x|X)\](.*?)\[\/\]/g;
+    const oldLineRe = /^[ \t]*(?:- )?\[( |x|X)\][ \t]?(.*)$/;
+    let lineGlobalStart = 0;
+    return memo.split("\n").map((line, lineIdx) => {
+      const parts: React.ReactNode[] = [];
+      let last = 0;
+      let m: RegExpExecArray | null;
+      const re = new RegExp(inlineRe.source, "g");
+      let foundInline = false;
+      while ((m = re.exec(line)) !== null) {
+        foundInline = true;
+        if (m.index > last) {
+          parts.push(
+            <span key={`t${lineIdx}-${last}`}>{line.slice(last, m.index)}</span>
+          );
+        }
         const done = m[1].toLowerCase() === "x";
         const label = m[2];
-        return (
+        const globalStart = lineGlobalStart + m.index;
+        parts.push(
           <button
-            key={`l${idx}`}
+            key={`c${lineIdx}-${m.index}`}
             type="button"
-            onClick={() => handleToggleLine(idx)}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 my-1 rounded-xl text-left transition ${
-              done
-                ? "bg-emerald-50 border border-emerald-200 opacity-70"
-                : "bg-emerald-50 border border-emerald-200 active:bg-emerald-100"
-            }`}
+            onClick={() => handleToggleAt(globalStart)}
+            className={`inline-check ${done ? "is-checked" : ""}`}
           >
-            <span
-              className={`flex-none w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center text-[11px] font-bold ${
-                done
-                  ? "bg-emerald-500 border-emerald-500 text-white"
-                  : "bg-white border-slate-300 text-transparent"
-              }`}
-            >
-              {done ? "✓" : ""}
-            </span>
-            <span
-              className={`flex-1 text-sm ${
-                done
-                  ? "line-through text-gray-500"
-                  : "text-emerald-900 font-medium"
-              }`}
-            >
-              {label || (
-                <span className="text-gray-400 font-normal">（空）</span>
-              )}
+            <span className="inline-check-box">{done ? "✓" : ""}</span>
+            <span className="inline-check-label">
+              {label || <span className="opacity-50">空</span>}
             </span>
           </button>
         );
+        last = m.index + m[0].length;
       }
-      if (line.trim() === "") return <div key={`l${idx}`} className="h-2" />;
+
+      if (!foundInline) {
+        // Old whole-line form fallback
+        const om = oldLineRe.exec(line);
+        if (om) {
+          const done = om[1].toLowerCase() === "x";
+          const label = om[2];
+          const markerOffsetInLine = line.indexOf("[", om.index);
+          const globalStart = lineGlobalStart + markerOffsetInLine;
+          lineGlobalStart += line.length + 1;
+          return (
+            <p
+              key={`l${lineIdx}`}
+              className="text-sm text-gray-800 leading-relaxed py-0.5"
+            >
+              <button
+                type="button"
+                onClick={() => handleToggleAt(globalStart)}
+                className={`inline-check ${done ? "is-checked" : ""}`}
+              >
+                <span className="inline-check-box">{done ? "✓" : ""}</span>
+                <span className="inline-check-label">
+                  {label || <span className="opacity-50">空</span>}
+                </span>
+              </button>
+            </p>
+          );
+        }
+        if (line.trim() === "") {
+          lineGlobalStart += line.length + 1;
+          return <div key={`l${lineIdx}`} className="h-2" />;
+        }
+        lineGlobalStart += line.length + 1;
+        return (
+          <p
+            key={`l${lineIdx}`}
+            className="text-sm text-gray-800 leading-relaxed py-0.5"
+          >
+            {line}
+          </p>
+        );
+      }
+
+      if (last < line.length) {
+        parts.push(<span key={`t${lineIdx}-end`}>{line.slice(last)}</span>);
+      }
+      lineGlobalStart += line.length + 1;
       return (
         <p
-          key={`l${idx}`}
+          key={`l${lineIdx}`}
           className="text-sm text-gray-800 leading-relaxed py-0.5"
         >
-          {line}
+          {parts}
         </p>
       );
     });

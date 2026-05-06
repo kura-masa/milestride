@@ -14,3 +14,74 @@ html, body {
 * {
   -webkit-touch-callout: none;
 }
+
+/* Tiptap memo editor */
+.tiptap p {
+  margin: 0;
+  padding: 2px 0;
+}
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+  float: left;
+}
+.tiptap:focus,
+.tiptap *:focus {
+  outline: none;
+}
+
+/* Inline check chip — shared between editor and read view */
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  padding: 1px 6px;
+  margin: 0 2px;
+  vertical-align: -2px;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.inline-check.is-checked {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  opacity: 0.75;
+}
+.inline-check-box {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #cbd5e1;
+  border-radius: 9999px;
+  background: #fff;
+  color: transparent;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+.inline-check.is-checked .inline-check-box {
+  background: #10b981;
+  border-color: #10b981;
+  color: #fff;
+}
+.inline-check-label {
+  color: #065f46;
+  font-weight: 500;
+  font-size: 0.95em;
+  white-space: nowrap;
+  min-width: 1ch;
+}
+.inline-check.is-checked .inline-check-label {
+  color: #6b7280;
+  text-decoration: line-through;
+  font-weight: 400;
+}
