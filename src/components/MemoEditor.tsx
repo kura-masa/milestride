@@ -2,62 +2,95 @@
 import {
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useRef,
-  useState,
   forwardRef,
+  useState,
 } from "react";
 
-type TextBlock = { id: string; kind: "text"; text: string };
-type CheckBlock = { id: string; kind: "check"; text: string; done: boolean };
-type Block = TextBlock | CheckBlock;
+const INLINE_RE = /\[( |x|X)\]/g;
 
-const CHECK_RE = /^(\s*)- \[( |x|X)\] (.*)$/;
-let __memoIdCounter = 0;
-const newId = () =>
-  `b${Date.now().toString(36)}_${(__memoIdCounter++).toString(36)}`;
+function escapeHtml(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
-function parse(memo: string): Block[] {
-  if (!memo) return [{ id: newId(), kind: "text", text: "" }];
-  const lines = memo.split("\n");
-  const blocks: Block[] = [];
-  let buf: string[] = [];
-  const flushBuf = () => {
-    if (buf.length > 0) {
-      blocks.push({ id: newId(), kind: "text", text: buf.join("\n") });
-      buf = [];
+function checkboxStyle(done: boolean) {
+  const bg = done ? "#34d399" : "transparent";
+  const border = done ? "#34d399" : "#d1d5db";
+  const color = done ? "#fff" : "transparent";
+  return (
+    "display:inline-flex;align-items:center;justify-content:center;" +
+    "width:1.15em;height:1.15em;border:2px solid " +
+    border +
+    ";border-radius:9999px;font-size:0.7em;line-height:1;" +
+    "vertical-align:-3px;margin:0 3px;background:" +
+    bg +
+    ";color:" +
+    color +
+    ";user-select:none;padding:0;cursor:pointer;font-weight:bold;"
+  );
+}
+
+function checkboxHtml(done: boolean) {
+  return (
+    `<span data-checkbox="" data-done="${done}" contenteditable="false" ` +
+    `style="${checkboxStyle(done)}">${done ? "✓" : ""}</span>`
+  );
+}
+
+function applyCheckboxStyle(el: HTMLElement, done: boolean) {
+  el.setAttribute("style", checkboxStyle(done));
+  el.textContent = done ? "✓" : "";
+}
+
+function memoToHtml(memo: string): string {
+  if (!memo) return "";
+  return memo
+    .split("\n")
+    .map((line) => {
+      let html = "";
+      let last = 0;
+      const re = new RegExp(INLINE_RE.source, "g");
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(line)) !== null) {
+        html += escapeHtml(line.slice(last, m.index));
+        html += checkboxHtml(m[1].toLowerCase() === "x");
+        last = m.index + m[0].length;
+      }
+      html += escapeHtml(line.slice(last));
+      return html === "" ? "<br>" : html;
+    })
+    .join("<br>");
+}
+
+function serialize(root: HTMLElement): string {
+  let out = "";
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      out += node.textContent ?? "";
+      return;
     }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as HTMLElement;
+    if (el.tagName === "BR") {
+      out += "\n";
+      return;
+    }
+    if (el.hasAttribute("data-checkbox")) {
+      out += `[${el.getAttribute("data-done") === "true" ? "x" : " "}]`;
+      return;
+    }
+    const isBlock = el.tagName === "DIV" || el.tagName === "P";
+    if (isBlock && out.length > 0 && !out.endsWith("\n")) out += "\n";
+    for (const child of Array.from(el.childNodes)) walk(child);
   };
-  for (const line of lines) {
-    const m = CHECK_RE.exec(line);
-    if (m) {
-      flushBuf();
-      blocks.push({
-        id: newId(),
-        kind: "check",
-        text: m[3],
-        done: m[2].toLowerCase() === "x",
-      });
-    } else {
-      buf.push(line);
-    }
-  }
-  flushBuf();
-  if (blocks.length === 0) blocks.push({ id: newId(), kind: "text", text: "" });
-  return blocks;
+  for (const child of Array.from(root.childNodes)) walk(child);
+  return out.replace(/\n+$/, "");
 }
 
-function compose(blocks: Block[]): string {
-  return blocks
-    .map((b) =>
-      b.kind === "text" ? b.text : `- [${b.done ? "x" : " "}] ${b.text}`
-    )
-    .join("\n");
-}
-
-export type MemoEditorHandle = {
-  addItem: () => void;
-};
+export type MemoEditorHandle = { addItem: () => void };
 
 export const MemoEditor = forwardRef<
   MemoEditorHandle,
@@ -68,179 +101,94 @@ export const MemoEditor = forwardRef<
     placeholder?: string;
   }
 >(function MemoEditor({ initialValue, resetKey, onChange, placeholder }, ref) {
-  const [blocks, setBlocks] = useState<Block[]>(() => parse(initialValue));
-  const [focusedId, setFocusedId] = useState<string | null>(null);
-  const textRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
-  const checkRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  const editorRef = useRef<HTMLDivElement>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const [isEmpty, setIsEmpty] = useState(!initialValue);
 
-  // Reset on resetKey change
+  const notifyChange = () => {
+    if (!editorRef.current) return;
+    const memo = serialize(editorRef.current);
+    setIsEmpty(memo === "");
+    onChangeRef.current(memo);
+  };
+
+  // Reset content on resetKey change
   useEffect(() => {
-    setBlocks(parse(initialValue));
+    if (editorRef.current) {
+      editorRef.current.innerHTML = memoToHtml(initialValue);
+      setIsEmpty(!initialValue);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
 
-  // Notify parent on any change
+  // Toggle checkbox on click (event delegation)
   useEffect(() => {
-    onChangeRef.current(compose(blocks));
-  }, [blocks]);
+    const editor = editorRef.current;
+    if (!editor) return;
+    const handler = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest(
+        "[data-checkbox]"
+      ) as HTMLElement | null;
+      if (!target || !editor.contains(target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const done = target.getAttribute("data-done") === "true";
+      const next = !done;
+      target.setAttribute("data-done", String(next));
+      applyCheckboxStyle(target, next);
+      notifyChange();
+    };
+    editor.addEventListener("click", handler);
+    return () => editor.removeEventListener("click", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Auto-resize text areas after each render
-  useLayoutEffect(() => {
-    textRefs.current.forEach((ta) => {
-      if (ta) {
-        ta.style.height = "auto";
-        ta.style.height = `${ta.scrollHeight}px`;
-      }
-    });
-  }, [blocks]);
-
-  const updateBlock = (id: string, patch: Partial<Block>) =>
-    setBlocks((arr) =>
-      arr.map((b) => (b.id === id ? ({ ...b, ...patch } as Block) : b))
-    );
-
-  const removeBlock = (id: string) =>
-    setBlocks((arr) => {
-      const next = arr.filter((b) => b.id !== id);
-      if (next.length === 0)
-        return [{ id: newId(), kind: "text", text: "" }];
-      return next;
-    });
-
-  const addCheckAtFocus = () => {
-    const newCheckId = newId();
-    let focusTarget: string = newCheckId;
-    setBlocks((arr) => {
-      const idx = focusedId
-        ? arr.findIndex((b) => b.id === focusedId)
-        : arr.length - 1;
-      if (idx === -1) {
-        return [...arr, { id: newCheckId, kind: "check", text: "", done: false }];
-      }
-      const target = arr[idx];
-      if (target.kind === "text") {
-        const ta = textRefs.current.get(target.id);
-        const pos = ta?.selectionStart ?? target.text.length;
-        const before = target.text.slice(0, pos);
-        const after = target.text.slice(pos);
-        const next: Block[] = [];
-        for (let i = 0; i < arr.length; i++) {
-          if (i === idx) {
-            next.push({ ...target, text: before });
-            next.push({
-              id: newCheckId,
-              kind: "check",
-              text: "",
-              done: false,
-            });
-            if (after.length > 0)
-              next.push({ id: newId(), kind: "text", text: after });
-          } else {
-            next.push(arr[i]);
-          }
-        }
-        return next;
-      } else {
-        const next: Block[] = [...arr];
-        next.splice(idx + 1, 0, {
-          id: newCheckId,
-          kind: "check",
-          text: "",
-          done: false,
-        });
-        // Ensure a trailing text block so user can keep writing after the check
-        if (idx + 2 >= next.length || next[idx + 2].kind !== "text") {
-          next.splice(idx + 2, 0, { id: newId(), kind: "text", text: "" });
-        }
-        return next;
-      }
-    });
-    setTimeout(() => {
-      checkRefs.current.get(focusTarget)?.focus();
-    }, 0);
+  const insertCheckbox = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    const sel = window.getSelection();
+    let range: Range;
+    if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+      range = sel.getRangeAt(0);
+    } else {
+      range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    }
+    range.deleteContents();
+    const tmp = document.createElement("div");
+    tmp.innerHTML = checkboxHtml(false);
+    const node = tmp.firstChild as HTMLElement;
+    range.insertNode(node);
+    // Trailing space so caret has somewhere to sit
+    const space = document.createTextNode(" ");
+    node.parentNode?.insertBefore(space, node.nextSibling);
+    const newRange = document.createRange();
+    newRange.setStartAfter(space);
+    newRange.collapse(true);
+    sel?.removeAllRanges();
+    sel?.addRange(newRange);
+    notifyChange();
   };
 
-  useImperativeHandle(ref, () => ({ addItem: addCheckAtFocus }));
+  useImperativeHandle(ref, () => ({ addItem: insertCheckbox }));
 
   return (
-    <div className="rounded-xl bg-gray-50 ring-1 ring-gray-200 focus-within:ring-sky-400 px-3 py-2.5 space-y-1 transition">
-      {blocks.length === 1 &&
-        blocks[0].kind === "text" &&
-        blocks[0].text === "" && (
-          <div className="absolute pointer-events-none text-sm text-gray-400 select-none">
-            {placeholder ?? "メモ・チェックリスト"}
-          </div>
-        )}
-      {blocks.map((b) => {
-        if (b.kind === "text") {
-          return (
-            <textarea
-              key={b.id}
-              ref={(el) => {
-                if (el) textRefs.current.set(b.id, el);
-                else textRefs.current.delete(b.id);
-              }}
-              rows={1}
-              value={b.text}
-              onChange={(e) => updateBlock(b.id, { text: e.target.value })}
-              onFocus={() => setFocusedId(b.id)}
-              className="w-full bg-transparent border-0 outline-none resize-none text-sm leading-relaxed py-0.5 placeholder:text-gray-400"
-              placeholder={blocks.length === 1 ? placeholder : ""}
-            />
-          );
-        }
-        return (
-          <div key={b.id} className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => updateBlock(b.id, { done: !b.done })}
-              className={`flex-none w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition ${
-                b.done
-                  ? "bg-emerald-400 border-emerald-400 text-white"
-                  : "border-gray-300"
-              }`}
-            >
-              {b.done && "✓"}
-            </button>
-            <input
-              ref={(el) => {
-                if (el) checkRefs.current.set(b.id, el);
-                else checkRefs.current.delete(b.id);
-              }}
-              value={b.text}
-              onChange={(e) => updateBlock(b.id, { text: e.target.value })}
-              onFocus={() => setFocusedId(b.id)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addCheckAtFocus();
-                } else if (
-                  e.key === "Backspace" &&
-                  b.text === "" &&
-                  e.currentTarget.selectionStart === 0
-                ) {
-                  e.preventDefault();
-                  removeBlock(b.id);
-                }
-              }}
-              className={`flex-1 bg-transparent border-0 outline-none text-sm py-0.5 ${
-                b.done ? "line-through text-gray-400" : ""
-              }`}
-              placeholder="項目"
-            />
-            <button
-              type="button"
-              onClick={() => removeBlock(b.id)}
-              className="flex-none w-7 h-7 rounded-full text-gray-400 active:bg-gray-100"
-              aria-label="項目を削除"
-            >
-              ×
-            </button>
-          </div>
-        );
-      })}
+    <div className="relative">
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={notifyChange}
+        className="min-h-[88px] w-full px-3 py-2.5 rounded-xl bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none text-sm leading-relaxed whitespace-pre-wrap"
+      />
+      {isEmpty && (
+        <div className="absolute top-2.5 left-3 text-sm text-gray-400 pointer-events-none">
+          {placeholder ?? "メモ・チェックリスト"}
+        </div>
+      )}
     </div>
   );
 });

@@ -58,51 +58,65 @@ export default function NodeSheet({
     }
   };
 
-  const handleToggleLine = (lineIdx: number) => {
+  const handleToggleAt = (markerStart: number) => {
     setDisplayMemo((prev) => {
-      const next = toggleMemoChecklistAt(prev, lineIdx);
+      if (!node) return prev;
+      const next = toggleMemoChecklistAt(prev, markerStart);
       onSaveMemo(node, next);
       return next;
     });
   };
 
-  // Render memo lines with checklist items as toggleable rows
-  const renderedLines = displayMemo.split("\n").map((line, i) => {
-    const m = /^(\s*)- \[( |x|X)\] (.*)$/.exec(line);
-    if (m) {
-      const isDone = m[2].toLowerCase() === "x";
-      return (
-        <button
-          key={`l${i}`}
-          onClick={() => handleToggleLine(i)}
-          className="w-full flex items-start gap-3 py-1.5 px-2 -mx-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition text-left"
-        >
-          <span
-            className={`flex-none mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs ${
-              isDone
+  // Render memo as inline mixed text + checkbox elements
+  const renderInlineMemo = () => {
+    const memo = displayMemo;
+    const out: React.ReactNode[] = [];
+    let lineGlobalStart = 0;
+    memo.split("\n").forEach((line, lineIdx) => {
+      if (lineIdx > 0) out.push(<br key={`br${lineIdx}`} />);
+      const re = /\[( |x|X)\]/g;
+      let last = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(line)) !== null) {
+        if (m.index > last) {
+          out.push(
+            <span key={`t${lineIdx}-${last}`}>{line.slice(last, m.index)}</span>
+          );
+        }
+        const done = m[1].toLowerCase() === "x";
+        const globalStart = lineGlobalStart + m.index;
+        out.push(
+          <button
+            key={`c${lineIdx}-${m.index}`}
+            type="button"
+            onClick={() => handleToggleAt(globalStart)}
+            className={`inline-flex items-center justify-center align-[-3px] mx-[3px] rounded-full border-2 font-bold transition ${
+              done
                 ? "bg-emerald-400 border-emerald-400 text-white"
-                : "border-gray-300"
+                : "bg-transparent border-gray-300 text-transparent"
             }`}
+            style={{
+              width: "1.15em",
+              height: "1.15em",
+              fontSize: "0.7em",
+              lineHeight: 1,
+              padding: 0,
+            }}
           >
-            {isDone && "✓"}
-          </span>
-          <span
-            className={`text-sm leading-relaxed ${
-              isDone ? "text-gray-400 line-through" : "text-gray-800"
-            }`}
-          >
-            {m[3] || <span className="text-gray-400">（空の項目）</span>}
-          </span>
-        </button>
-      );
-    }
-    if (line.trim() === "") return <div key={`l${i}`} className="h-2" />;
-    return (
-      <p key={`l${i}`} className="text-sm text-gray-800 leading-relaxed">
-        {line}
-      </p>
-    );
-  });
+            {done ? "✓" : ""}
+          </button>
+        );
+        last = m.index + m[0].length;
+      }
+      if (last < line.length) {
+        out.push(
+          <span key={`t${lineIdx}-end`}>{line.slice(last)}</span>
+        );
+      }
+      lineGlobalStart += line.length + 1;
+    });
+    return out;
+  };
 
   return (
     <AnimatePresence>
@@ -195,7 +209,9 @@ export default function NodeSheet({
                     placeholder="メモ・チェックリスト"
                   />
                 ) : displayMemo ? (
-                  <div className="space-y-0.5">{renderedLines}</div>
+                  <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+                    {renderInlineMemo()}
+                  </div>
                 ) : (
                   <p className="text-sm text-gray-400">まだメモはありません</p>
                 )}

@@ -261,10 +261,10 @@ export function useMutations() {
   return ops;
 }
 
-const CHECKLIST_LINE_RE = /^(\s*)- \[( |x|X)\] (.*)$/;
+const INLINE_CHECK_RE = /\[( |x|X)\]/g;
 
 export type MemoChecklistItem = {
-  lineIdx: number;
+  markerStart: number;
   label: string;
   done: boolean;
 };
@@ -272,23 +272,31 @@ export type MemoChecklistItem = {
 export function parseMemoChecklist(memo: string | undefined): MemoChecklistItem[] {
   if (!memo) return [];
   const items: MemoChecklistItem[] = [];
-  memo.split("\n").forEach((line, i) => {
-    const m = CHECKLIST_LINE_RE.exec(line);
-    if (m) items.push({ lineIdx: i, label: m[3], done: m[2].toLowerCase() === "x" });
-  });
+  const re = new RegExp(INLINE_CHECK_RE.source, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(memo)) !== null) {
+    const done = m[1].toLowerCase() === "x";
+    const labelStart = m.index + m[0].length;
+    // Label: from after marker until next marker or newline
+    const remaining = memo.slice(labelStart);
+    const nlIdx = remaining.indexOf("\n");
+    const nextRel = remaining.search(/\[( |x|X)\]/);
+    let labelEnd = remaining.length;
+    if (nlIdx !== -1) labelEnd = Math.min(labelEnd, nlIdx);
+    if (nextRel !== -1) labelEnd = Math.min(labelEnd, nextRel);
+    const label = remaining.slice(0, labelEnd).trim();
+    items.push({ markerStart: m.index, label, done });
+  }
   return items;
 }
 
-export function toggleMemoChecklistAt(memo: string, lineIdx: number): string {
-  const lines = memo.split("\n");
-  const line = lines[lineIdx];
-  if (line == null) return memo;
-  lines[lineIdx] = line.replace(
-    CHECKLIST_LINE_RE,
-    (_full, sp: string, mark: string, rest: string) =>
-      `${sp}- [${mark.toLowerCase() === "x" ? " " : "x"}] ${rest}`
-  );
-  return lines.join("\n");
+export function toggleMemoChecklistAt(memo: string, markerStart: number): string {
+  if (markerStart < 0 || markerStart + 2 >= memo.length) return memo;
+  if (memo[markerStart] !== "[" || memo[markerStart + 2] !== "]") return memo;
+  const ch = memo[markerStart + 1];
+  if (ch !== " " && ch !== "x" && ch !== "X") return memo;
+  const newCh = ch === " " ? "x" : " ";
+  return memo.slice(0, markerStart + 1) + newCh + memo.slice(markerStart + 2);
 }
 
 export function deriveStatusFromMemo(
