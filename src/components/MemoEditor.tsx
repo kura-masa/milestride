@@ -160,7 +160,7 @@ type JSONNode = {
 
 function nodeText(node: JSONNode | undefined): string {
   if (!node) return "";
-  if (node.type === "text") return node.text ?? "";
+  if (node.type === "text") return (node.text ?? "").replace(/​/g, "");
   if (node.content) return node.content.map(nodeText).join("");
   return "";
 }
@@ -169,7 +169,7 @@ function paragraphToString(node: JSONNode): string {
   if (!node.content) return "";
   let out = "";
   for (const c of node.content) {
-    if (c.type === "text") out += c.text ?? "";
+    if (c.type === "text") out += (c.text ?? "").replace(/​/g, "");
     else if (c.type === "inlineCheck") {
       const checked = Boolean(c.attrs?.checked);
       const label = nodeText(c);
@@ -246,12 +246,16 @@ export const MemoEditor = forwardRef<
       addItem: () => {
         if (!editor) return;
         const { state, view } = editor;
-        const node = state.schema.nodes.inlineCheck.create({ checked: false });
+        // Insert with a zero-width space inside so mobile WebKit has an
+        // actual text node to anchor the caret on — empty inline nodes are
+        // unreliable for caret placement.
+        const node = state.schema.nodes.inlineCheck.create(
+          { checked: false },
+          state.schema.text("​")
+        );
         const pos = state.selection.from;
         const tr = state.tr.insert(pos, node);
-        // After insertion, the new (empty) inline node occupies [pos, pos+2).
-        // Position pos+1 is between the open and close markers — inside
-        // the empty content area where typing should land.
+        // pos+1 = inside, before the ZWS. Typing inserts here.
         tr.setSelection(TextSelection.create(tr.doc, pos + 1));
         view.dispatch(tr);
         view.focus();
