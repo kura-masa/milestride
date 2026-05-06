@@ -261,10 +261,11 @@ export function useMutations() {
   return ops;
 }
 
-const INLINE_CHECK_RE = /\[( |x|X)\]/g;
+// Lines that look like a check item, optionally with leading "- " from old data
+export const CHECK_LINE_RE = /^[ \t]*(?:- )?\[( |x|X)\][ \t]?(.*)$/;
 
 export type MemoChecklistItem = {
-  markerStart: number;
+  lineIdx: number;
   label: string;
   done: boolean;
 };
@@ -272,31 +273,28 @@ export type MemoChecklistItem = {
 export function parseMemoChecklist(memo: string | undefined): MemoChecklistItem[] {
   if (!memo) return [];
   const items: MemoChecklistItem[] = [];
-  const re = new RegExp(INLINE_CHECK_RE.source, "g");
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(memo)) !== null) {
-    const done = m[1].toLowerCase() === "x";
-    const labelStart = m.index + m[0].length;
-    // Label: from after marker until next marker or newline
-    const remaining = memo.slice(labelStart);
-    const nlIdx = remaining.indexOf("\n");
-    const nextRel = remaining.search(/\[( |x|X)\]/);
-    let labelEnd = remaining.length;
-    if (nlIdx !== -1) labelEnd = Math.min(labelEnd, nlIdx);
-    if (nextRel !== -1) labelEnd = Math.min(labelEnd, nextRel);
-    const label = remaining.slice(0, labelEnd).trim();
-    items.push({ markerStart: m.index, label, done });
-  }
+  memo.split("\n").forEach((line, lineIdx) => {
+    const m = CHECK_LINE_RE.exec(line);
+    if (m)
+      items.push({
+        lineIdx,
+        label: m[2],
+        done: m[1].toLowerCase() === "x",
+      });
+  });
   return items;
 }
 
-export function toggleMemoChecklistAt(memo: string, markerStart: number): string {
-  if (markerStart < 0 || markerStart + 2 >= memo.length) return memo;
-  if (memo[markerStart] !== "[" || memo[markerStart + 2] !== "]") return memo;
-  const ch = memo[markerStart + 1];
-  if (ch !== " " && ch !== "x" && ch !== "X") return memo;
-  const newCh = ch === " " ? "x" : " ";
-  return memo.slice(0, markerStart + 1) + newCh + memo.slice(markerStart + 2);
+export function toggleMemoChecklistAt(memo: string, lineIdx: number): string {
+  const lines = memo.split("\n");
+  const line = lines[lineIdx];
+  if (line == null) return memo;
+  const m = CHECK_LINE_RE.exec(line);
+  if (!m) return memo;
+  const done = m[1].toLowerCase() === "x";
+  // Always serialize back to canonical "[ ] label" form (drop leading "- ")
+  lines[lineIdx] = `[${done ? " " : "x"}] ${m[2]}`;
+  return lines.join("\n");
 }
 
 export function deriveStatusFromMemo(

@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 
-const INLINE_RE = /\[( |x|X)\]/g;
+const CHECK_LINE_RE = /^[ \t]*(?:- )?\[( |x|X)\][ \t]?(.*)$/;
 
 function escapeHtml(s: string) {
   return s
@@ -16,16 +16,26 @@ function escapeHtml(s: string) {
     .replace(/>/g, "&gt;");
 }
 
+const CHIP_STYLE =
+  "display:flex;align-items:center;gap:8px;background:#ecfdf5;" +
+  "border:1px solid #a7f3d0;border-radius:10px;padding:6px 10px;" +
+  "margin:4px 0;";
+
+const CHIP_DONE_STYLE =
+  "display:flex;align-items:center;gap:8px;background:#f0fdf4;" +
+  "border:1px solid #bbf7d0;border-radius:10px;padding:6px 10px;" +
+  "margin:4px 0;opacity:0.7;";
+
 function checkboxStyle(done: boolean) {
-  const bg = done ? "#34d399" : "transparent";
-  const border = done ? "#34d399" : "#d1d5db";
+  const bg = done ? "#10b981" : "#fff";
+  const border = done ? "#10b981" : "#cbd5e1";
   const color = done ? "#fff" : "transparent";
   return (
-    "display:inline-flex;align-items:center;justify-content:center;" +
-    "width:1.15em;height:1.15em;border:2px solid " +
+    "flex:none;display:inline-flex;align-items:center;justify-content:center;" +
+    "width:18px;height:18px;border:2px solid " +
     border +
-    ";border-radius:9999px;font-size:0.7em;line-height:1;" +
-    "vertical-align:-3px;margin:0 3px;background:" +
+    ";border-radius:9999px;font-size:11px;line-height:1;" +
+    "background:" +
     bg +
     ";color:" +
     color +
@@ -33,61 +43,80 @@ function checkboxStyle(done: boolean) {
   );
 }
 
-function checkboxHtml(done: boolean) {
+function checkItemHtml(done: boolean, label: string): string {
+  const labelStyle = done
+    ? "flex:1;outline:none;text-decoration:line-through;color:#6b7280;"
+    : "flex:1;outline:none;color:#065f46;font-weight:500;";
   return (
-    `<span data-checkbox="" data-done="${done}" contenteditable="false" ` +
-    `style="${checkboxStyle(done)}">${done ? "✓" : ""}</span>`
+    `<div data-check-item="" style="${done ? CHIP_DONE_STYLE : CHIP_STYLE}">` +
+    `<span data-checkbox="" data-done="${done}" contenteditable="false" style="${checkboxStyle(
+      done
+    )}">${done ? "✓" : ""}</span>` +
+    `<span data-check-label="" style="${labelStyle}">${
+      escapeHtml(label) || "&#8203;"
+    }</span>` +
+    `</div>`
   );
 }
 
-function applyCheckboxStyle(el: HTMLElement, done: boolean) {
-  el.setAttribute("style", checkboxStyle(done));
-  el.textContent = done ? "✓" : "";
+function applyChipStyle(wrapper: HTMLElement, done: boolean) {
+  wrapper.setAttribute("style", done ? CHIP_DONE_STYLE : CHIP_STYLE);
+  const cb = wrapper.querySelector("[data-checkbox]") as HTMLElement | null;
+  const lbl = wrapper.querySelector("[data-check-label]") as HTMLElement | null;
+  if (cb) {
+    cb.setAttribute("style", checkboxStyle(done));
+    cb.setAttribute("data-done", String(done));
+    cb.textContent = done ? "✓" : "";
+  }
+  if (lbl) {
+    lbl.setAttribute(
+      "style",
+      done
+        ? "flex:1;outline:none;text-decoration:line-through;color:#6b7280;"
+        : "flex:1;outline:none;color:#065f46;font-weight:500;"
+    );
+  }
 }
 
 function memoToHtml(memo: string): string {
-  if (!memo) return "";
+  if (!memo) return "<div><br></div>";
   return memo
     .split("\n")
     .map((line) => {
-      let html = "";
-      let last = 0;
-      const re = new RegExp(INLINE_RE.source, "g");
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(line)) !== null) {
-        html += escapeHtml(line.slice(last, m.index));
-        html += checkboxHtml(m[1].toLowerCase() === "x");
-        last = m.index + m[0].length;
-      }
-      html += escapeHtml(line.slice(last));
-      return html === "" ? "<br>" : html;
+      const m = CHECK_LINE_RE.exec(line);
+      if (m) return checkItemHtml(m[1].toLowerCase() === "x", m[2]);
+      return `<div>${line === "" ? "<br>" : escapeHtml(line)}</div>`;
     })
-    .join("<br>");
+    .join("");
 }
 
 function serialize(root: HTMLElement): string {
-  let out = "";
-  const walk = (node: Node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      out += node.textContent ?? "";
-      return;
+  const lines: string[] = [];
+  for (const child of Array.from(root.childNodes)) {
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const el = child as HTMLElement;
+      if (el.hasAttribute("data-check-item")) {
+        const cb = el.querySelector("[data-checkbox]") as HTMLElement | null;
+        const lbl = el.querySelector("[data-check-label]") as HTMLElement | null;
+        const done = cb?.getAttribute("data-done") === "true";
+        const labelText = (lbl?.textContent ?? "").replace(/​/g, "");
+        lines.push(`[${done ? "x" : " "}] ${labelText}`);
+      } else if (el.tagName === "BR") {
+        lines.push("");
+      } else {
+        // DIV / P / SPAN-as-block (rare). Use textContent, treat as one line
+        const t = (el.textContent ?? "").replace(/​/g, "");
+        lines.push(t);
+      }
+    } else if (child.nodeType === Node.TEXT_NODE) {
+      const t = (child.textContent ?? "").replace(/​/g, "");
+      // Loose text at top level — split by newline if any
+      for (const part of t.split("\n")) lines.push(part);
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
-    const el = node as HTMLElement;
-    if (el.tagName === "BR") {
-      out += "\n";
-      return;
-    }
-    if (el.hasAttribute("data-checkbox")) {
-      out += `[${el.getAttribute("data-done") === "true" ? "x" : " "}]`;
-      return;
-    }
-    const isBlock = el.tagName === "DIV" || el.tagName === "P";
-    if (isBlock && out.length > 0 && !out.endsWith("\n")) out += "\n";
-    for (const child of Array.from(el.childNodes)) walk(child);
-  };
-  for (const child of Array.from(root.childNodes)) walk(child);
-  return out.replace(/\n+$/, "");
+  }
+  // Trim trailing empties
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  return lines.join("\n");
 }
 
 export type MemoEditorHandle = { addItem: () => void };
@@ -113,7 +142,7 @@ export const MemoEditor = forwardRef<
     onChangeRef.current(memo);
   };
 
-  // Reset content on resetKey change
+  // Reset content when resetKey changes
   useEffect(() => {
     if (editorRef.current) {
       editorRef.current.innerHTML = memoToHtml(initialValue);
@@ -122,21 +151,21 @@ export const MemoEditor = forwardRef<
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
 
-  // Toggle checkbox on click (event delegation)
+  // Click delegation: toggle checkboxes
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
     const handler = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest(
+      const cb = (e.target as HTMLElement).closest(
         "[data-checkbox]"
       ) as HTMLElement | null;
-      if (!target || !editor.contains(target)) return;
+      if (!cb || !editor.contains(cb)) return;
       e.preventDefault();
       e.stopPropagation();
-      const done = target.getAttribute("data-done") === "true";
-      const next = !done;
-      target.setAttribute("data-done", String(next));
-      applyCheckboxStyle(target, next);
+      const wrapper = cb.closest("[data-check-item]") as HTMLElement | null;
+      if (!wrapper) return;
+      const done = cb.getAttribute("data-done") === "true";
+      applyChipStyle(wrapper, !done);
       notifyChange();
     };
     editor.addEventListener("click", handler);
@@ -144,7 +173,62 @@ export const MemoEditor = forwardRef<
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const insertCheckbox = () => {
+  // Keyboard: Enter inside check item escapes to new prose div below
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const handler = (e: KeyboardEvent) => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      const wrapper = (range.startContainer.parentElement || null)?.closest(
+        "[data-check-item]"
+      ) as HTMLElement | null;
+      if (!wrapper) return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const newDiv = document.createElement("div");
+        newDiv.innerHTML = "<br>";
+        wrapper.parentNode?.insertBefore(newDiv, wrapper.nextSibling);
+        const r = document.createRange();
+        r.setStart(newDiv, 0);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        notifyChange();
+      } else if (e.key === "Backspace") {
+        const lbl = wrapper.querySelector(
+          "[data-check-label]"
+        ) as HTMLElement | null;
+        if (
+          lbl &&
+          (lbl.textContent ?? "").replace(/​/g, "") === "" &&
+          range.startOffset === 0
+        ) {
+          e.preventDefault();
+          const next =
+            wrapper.previousElementSibling || wrapper.nextElementSibling;
+          wrapper.remove();
+          if (next) {
+            const r = document.createRange();
+            r.selectNodeContents(next);
+            r.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(r);
+          }
+          notifyChange();
+        }
+      }
+    };
+    editor.addEventListener("keydown", handler);
+    return () => editor.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Insert a new check item at the caret position. Splits the surrounding
+  // prose block if needed so the chip lands exactly between the text before
+  // and after the cursor.
+  const insertCheckItem = () => {
     const editor = editorRef.current;
     if (!editor) return;
     editor.focus();
@@ -157,23 +241,62 @@ export const MemoEditor = forwardRef<
       range.selectNodeContents(editor);
       range.collapse(false);
     }
-    range.deleteContents();
+    // Find the enclosing top-level child (DIV) of the editor, if any
+    let topNode: Node | null = range.startContainer;
+    while (topNode && topNode.parentNode !== editor) {
+      topNode = topNode.parentNode;
+    }
+
     const tmp = document.createElement("div");
-    tmp.innerHTML = checkboxHtml(false);
-    const node = tmp.firstChild as HTMLElement;
-    range.insertNode(node);
-    // Trailing space so caret has somewhere to sit
-    const space = document.createTextNode(" ");
-    node.parentNode?.insertBefore(space, node.nextSibling);
-    const newRange = document.createRange();
-    newRange.setStartAfter(space);
-    newRange.collapse(true);
-    sel?.removeAllRanges();
-    sel?.addRange(newRange);
+    tmp.innerHTML = checkItemHtml(false, "");
+    const chip = tmp.firstChild as HTMLElement;
+
+    if (topNode && (topNode as HTMLElement).tagName === "DIV") {
+      const block = topNode as HTMLElement;
+      // Split text node at caret within this div
+      // Build "before" and "after" content using Range
+      const beforeRange = document.createRange();
+      beforeRange.setStartBefore(block.firstChild ?? block);
+      beforeRange.setEnd(range.startContainer, range.startOffset);
+      const beforeFrag = beforeRange.cloneContents();
+
+      const afterRange = document.createRange();
+      afterRange.setStart(range.startContainer, range.startOffset);
+      afterRange.setEndAfter(block.lastChild ?? block);
+      const afterFrag = afterRange.cloneContents();
+
+      const beforeDiv = document.createElement("div");
+      beforeDiv.appendChild(beforeFrag);
+      if (!beforeDiv.textContent) beforeDiv.innerHTML = "<br>";
+
+      const afterDiv = document.createElement("div");
+      afterDiv.appendChild(afterFrag);
+      if (!afterDiv.textContent) afterDiv.innerHTML = "<br>";
+
+      block.replaceWith(beforeDiv, chip, afterDiv);
+    } else {
+      // Fallback: insert at caret
+      range.deleteContents();
+      range.insertNode(chip);
+    }
+
+    // Move caret into the chip's label
+    const label = chip.querySelector(
+      "[data-check-label]"
+    ) as HTMLElement | null;
+    if (label) {
+      // Clear zero-width placeholder so caret sits at start
+      label.textContent = "";
+      const r = document.createRange();
+      r.setStart(label, 0);
+      r.collapse(true);
+      sel?.removeAllRanges();
+      sel?.addRange(r);
+    }
     notifyChange();
   };
 
-  useImperativeHandle(ref, () => ({ addItem: insertCheckbox }));
+  useImperativeHandle(ref, () => ({ addItem: insertCheckItem }));
 
   return (
     <div className="relative">
@@ -182,7 +305,7 @@ export const MemoEditor = forwardRef<
         contentEditable
         suppressContentEditableWarning
         onInput={notifyChange}
-        className="min-h-[88px] w-full px-3 py-2.5 rounded-xl bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none text-sm leading-relaxed whitespace-pre-wrap"
+        className="min-h-[88px] w-full px-3 py-2.5 rounded-xl bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none text-sm leading-relaxed"
       />
       {isEmpty && (
         <div className="absolute top-2.5 left-3 text-sm text-gray-400 pointer-events-none">

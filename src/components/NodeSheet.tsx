@@ -58,64 +58,68 @@ export default function NodeSheet({
     }
   };
 
-  const handleToggleAt = (markerStart: number) => {
+  const handleToggleLine = (lineIdx: number) => {
     setDisplayMemo((prev) => {
       if (!node) return prev;
-      const next = toggleMemoChecklistAt(prev, markerStart);
+      const next = toggleMemoChecklistAt(prev, lineIdx);
       onSaveMemo(node, next);
       return next;
     });
   };
 
-  // Render memo as inline mixed text + checkbox elements
-  const renderInlineMemo = () => {
+  // Render memo line-by-line: check items as chip rows, others as prose text
+  const renderMemo = () => {
     const memo = displayMemo;
-    const out: React.ReactNode[] = [];
-    let lineGlobalStart = 0;
-    memo.split("\n").forEach((line, lineIdx) => {
-      if (lineIdx > 0) out.push(<br key={`br${lineIdx}`} />);
-      const re = /\[( |x|X)\]/g;
-      let last = 0;
-      let m: RegExpExecArray | null;
-      while ((m = re.exec(line)) !== null) {
-        if (m.index > last) {
-          out.push(
-            <span key={`t${lineIdx}-${last}`}>{line.slice(last, m.index)}</span>
-          );
-        }
+    const checkLineRe = /^[ \t]*(?:- )?\[( |x|X)\][ \t]?(.*)$/;
+    return memo.split("\n").map((line, idx) => {
+      const m = checkLineRe.exec(line);
+      if (m) {
         const done = m[1].toLowerCase() === "x";
-        const globalStart = lineGlobalStart + m.index;
-        out.push(
+        const label = m[2];
+        return (
           <button
-            key={`c${lineIdx}-${m.index}`}
+            key={`l${idx}`}
             type="button"
-            onClick={() => handleToggleAt(globalStart)}
-            className={`inline-flex items-center justify-center align-[-3px] mx-[3px] rounded-full border-2 font-bold transition ${
+            onClick={() => handleToggleLine(idx)}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 my-1 rounded-xl text-left transition ${
               done
-                ? "bg-emerald-400 border-emerald-400 text-white"
-                : "bg-transparent border-gray-300 text-transparent"
+                ? "bg-emerald-50 border border-emerald-200 opacity-70"
+                : "bg-emerald-50 border border-emerald-200 active:bg-emerald-100"
             }`}
-            style={{
-              width: "1.15em",
-              height: "1.15em",
-              fontSize: "0.7em",
-              lineHeight: 1,
-              padding: 0,
-            }}
           >
-            {done ? "✓" : ""}
+            <span
+              className={`flex-none w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center text-[11px] font-bold ${
+                done
+                  ? "bg-emerald-500 border-emerald-500 text-white"
+                  : "bg-white border-slate-300 text-transparent"
+              }`}
+            >
+              {done ? "✓" : ""}
+            </span>
+            <span
+              className={`flex-1 text-sm ${
+                done
+                  ? "line-through text-gray-500"
+                  : "text-emerald-900 font-medium"
+              }`}
+            >
+              {label || (
+                <span className="text-gray-400 font-normal">（空）</span>
+              )}
+            </span>
           </button>
         );
-        last = m.index + m[0].length;
       }
-      if (last < line.length) {
-        out.push(
-          <span key={`t${lineIdx}-end`}>{line.slice(last)}</span>
-        );
-      }
-      lineGlobalStart += line.length + 1;
+      if (line.trim() === "") return <div key={`l${idx}`} className="h-2" />;
+      return (
+        <p
+          key={`l${idx}`}
+          className="text-sm text-gray-800 leading-relaxed py-0.5"
+        >
+          {line}
+        </p>
+      );
     });
-    return out;
   };
 
   return (
@@ -209,9 +213,7 @@ export default function NodeSheet({
                     placeholder="メモ・チェックリスト"
                   />
                 ) : displayMemo ? (
-                  <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-                    {renderInlineMemo()}
-                  </div>
+                  <div className="space-y-0">{renderMemo()}</div>
                 ) : (
                   <p className="text-sm text-gray-400">まだメモはありません</p>
                 )}
