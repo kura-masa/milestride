@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useImperativeHandle, forwardRef } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
+import { TextSelection } from "@tiptap/pm/state";
 import {
   useEditor,
   EditorContent,
@@ -244,19 +245,16 @@ export const MemoEditor = forwardRef<
     () => ({
       addItem: () => {
         if (!editor) return;
-        const pos = editor.state.selection.from;
-        editor
-          .chain()
-          .insertContentAt(pos, {
-            type: "inlineCheck",
-            attrs: { checked: false },
-            content: [],
-          })
-          // After insertion, the new node occupies [pos, pos+2). Place caret
-          // at pos+1 — inside the empty content area — so typing flows in.
-          .setTextSelection(pos + 1)
-          .focus()
-          .run();
+        const { state, view } = editor;
+        const node = state.schema.nodes.inlineCheck.create({ checked: false });
+        const pos = state.selection.from;
+        const tr = state.tr.insert(pos, node);
+        // After insertion, the new (empty) inline node occupies [pos, pos+2).
+        // Position pos+1 is between the open and close markers — inside
+        // the empty content area where typing should land.
+        tr.setSelection(TextSelection.create(tr.doc, pos + 1));
+        view.dispatch(tr);
+        view.focus();
       },
     }),
     [editor]

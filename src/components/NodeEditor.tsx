@@ -173,7 +173,14 @@ export default function NodeEditor({
                 rightSlot={
                   <button
                     type="button"
-                    onClick={() => memoEditorRef.current?.addItem()}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      memoEditorRef.current?.addItem();
+                    }}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      memoEditorRef.current?.addItem();
+                    }}
                     className="px-3 py-1 rounded-full text-xs font-semibold text-sky-600 ring-1 ring-sky-200 active:bg-sky-50"
                   >
                     ＋ 項目を追加
