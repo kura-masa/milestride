@@ -171,7 +171,7 @@ export default function NodeEditor({
                   className="w-full px-3 py-2.5 rounded-xl bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none text-sm"
                   value={draft.title}
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                  placeholder="例: 返報性の原理を読む"
+                  placeholder="タイトルを書いてください"
                   autoFocus={isNew && !requireNewGroup}
                 />
               </Field>

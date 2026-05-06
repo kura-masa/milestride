@@ -86,6 +86,12 @@ export default function NodeSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+            }}
           >
             <div className="sticky top-0 bg-white pt-3 pb-2 px-5 border-b border-gray-100">
               <div className="mx-auto h-1.5 w-10 rounded-full bg-gray-300" />
@@ -108,9 +114,9 @@ export default function NodeSheet({
                     <button
                       onClick={handleSaveMemo}
                       disabled={savingMemo}
-                      className="text-xs font-bold text-emerald-600 active:text-emerald-700 disabled:text-gray-300"
+                      className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500 text-white shadow-sm ring-1 ring-emerald-600/20 active:bg-emerald-600 disabled:bg-gray-300 disabled:ring-0"
                     >
-                      {savingMemo ? "保存中…" : "保存"}
+                      {savingMemo ? "保存中…" : "✓ 保存"}
                     </button>
                   ) : (
                     <button
