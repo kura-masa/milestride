@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   useUserData,
@@ -42,7 +42,12 @@ function App() {
   const [mode, setMode] = useState<Mode>("focus");
   const [overviewLayout, setOverviewLayout] = useState<OverviewLayout>("grouped");
   const [activeTab, setActiveTab] = useState<string>(UNGROUPED);
-  const [sheet, setSheet] = useState<Node | null>(null);
+  const [sheetId, setSheetId] = useState<string | null>(null);
+  const sheet = useMemo(
+    () => (sheetId ? nodes.find((n) => n.id === sheetId) ?? null : null),
+    [sheetId, nodes]
+  );
+  const setSheet = (n: Node | null) => setSheetId(n?.id ?? null);
   const [menu, setMenu] = useState<Node | null>(null);
   const [editor, setEditor] = useState<{
     node: Node | null;
@@ -58,7 +63,7 @@ function App() {
     { id: string; title: string } | null
   >(null);
   const [confirmDelGroup, setConfirmDelGroup] = useState<
-    { id: string; title: string } | null
+    { id: string; title: string; nodeCount: number } | null
   >(null);
 
   const tabs = useMemo<{ id: string; title: string; nodes: Node[] }[]>(() => {
@@ -82,7 +87,63 @@ function App() {
   );
   const currentTab = tabs[activeIdx];
 
-  const overall = progress(nodes);
+  const seedingRef = useRef(false);
+  useEffect(() => {
+    if (!ready || !ops || !user) return;
+    if (seedingRef.current) return;
+    if (typeof window === "undefined") return;
+    const key = `milestride_seeded_${user.uid}`;
+    if (localStorage.getItem(key)) return;
+    if (nodes.length > 0 || groups.length > 0) {
+      localStorage.setItem(key, "1");
+      return;
+    }
+    seedingRef.current = true;
+    (async () => {
+      try {
+        const gid = await ops.addGroup("はじめてのロードマップ");
+        const id1 = await ops.addNode({
+          title: "アプリの使い方を確認する",
+          detail: "Milestrideでできることを把握する",
+          groupId: gid,
+          parents: [],
+          order: 1,
+          status: "done",
+          checklist: [
+            { id: ops.newChecklistId(), label: "サンプルを眺める", done: true },
+          ],
+        });
+        const id2 = await ops.addNode({
+          title: "やりたいことを1つ書く",
+          detail: "達成したい目的を1行で表現する",
+          groupId: gid,
+          parents: [id1],
+          order: 2,
+          status: "in_progress",
+          checklist: [
+            { id: ops.newChecklistId(), label: "目的を決める", done: true },
+            { id: ops.newChecklistId(), label: "メモに背景を書く", done: false },
+          ],
+        });
+        await ops.addNode({
+          title: "行動してチェックを入れる",
+          detail: "小さく動いて進捗を可視化する",
+          groupId: gid,
+          parents: [id2],
+          order: 3,
+          status: "todo",
+          checklist: [
+            { id: ops.newChecklistId(), label: "今日の一歩を実行", done: false },
+            { id: ops.newChecklistId(), label: "気づきをメモに残す", done: false },
+          ],
+        });
+        localStorage.setItem(key, "1");
+        setActiveTab(gid);
+      } finally {
+        seedingRef.current = false;
+      }
+    })();
+  }, [ready, ops, user, nodes.length, groups.length]);
 
   if (!ready || !ops) {
     return (
@@ -133,14 +194,10 @@ function App() {
       <Header
         userName={user?.displayName ?? ""}
         userPhoto={user?.photoURL ?? ""}
-        pct={overall.pct}
-        done={overall.done}
-        inProg={overall.inProg}
-        total={overall.total}
         onSignOut={() => signOutUser().catch(console.error)}
       />
 
-      <div className="sticky top-[88px] z-20 bg-gradient-to-b from-slate-50/95 to-slate-50/70 backdrop-blur px-4 pt-2 pb-3">
+      <div className="sticky top-[52px] z-20 bg-gradient-to-b from-slate-50/95 to-slate-50/70 backdrop-blur px-4 pt-2 pb-3">
         <div className="max-w-md mx-auto flex items-center gap-2">
           <ModeToggle mode={mode} setMode={setMode} />
         </div>
@@ -169,12 +226,10 @@ function App() {
                   })
                 }
                 onRenameGroup={(id, current) => {
-                  const tab = tabs.find((t) => t.id === id);
-                  const empty = (tab?.nodes.length ?? 0) === 0;
-                  if (id !== UNGROUPED && empty) {
-                    setGroupMenu({ id, title: current });
-                  } else {
+                  if (id === UNGROUPED) {
                     setRenameTarget({ id, current });
+                  } else {
+                    setGroupMenu({ id, title: current });
                   }
                 }}
               />
@@ -246,7 +301,8 @@ function App() {
       <NodeSheet
         node={sheet}
         onClose={() => setSheet(null)}
-        onToggleChecklist={(n, id) => ops.toggleChecklist(n, id)}
+        onSaveChecklist={(n, items) => ops.replaceChecklist(n.id, items)}
+        onSaveMemo={(n, memo) => ops.updateNode(n.id, { memo })}
       />
 
       <ActionMenu
@@ -268,10 +324,6 @@ function App() {
         isNew={!editor?.node}
         initial={editor?.node ?? {}}
         allNodes={nodes}
-        groups={groups}
-        showGroupChips={
-          editor?.node ? true : editor?.showGroupChips ?? false
-        }
         requireNewGroup={editor?.requireNewGroup ?? false}
         onSave={handleSave}
         onCancel={() => setEditor(null)}
@@ -328,20 +380,33 @@ function App() {
         }}
         onDelete={() => {
           if (!groupMenu) return;
-          setConfirmDelGroup({ id: groupMenu.id, title: groupMenu.title });
+          const tab = tabs.find((t) => t.id === groupMenu.id);
+          setConfirmDelGroup({
+            id: groupMenu.id,
+            title: groupMenu.title,
+            nodeCount: tab?.nodes.length ?? 0,
+          });
           setGroupMenu(null);
         }}
       />
 
       <ConfirmDialog
         open={!!confirmDelGroup}
-        title="本当に削除して良いですか？"
+        title={
+          (confirmDelGroup?.nodeCount ?? 0) > 0
+            ? "グループ内の要素が全て消えますがよろしいですか？"
+            : "本当に削除して良いですか？"
+        }
         message={confirmDelGroup?.title}
         confirmLabel="削除する"
         cancelLabel="削除しない"
         onConfirm={async () => {
           if (!confirmDelGroup) return;
-          await ops.deleteGroup(confirmDelGroup.id, nodes);
+          await ops.deleteGroup(
+            confirmDelGroup.id,
+            nodes,
+            confirmDelGroup.nodeCount > 0
+          );
           if (activeTab === confirmDelGroup.id) setActiveTab(UNGROUPED);
           setConfirmDelGroup(null);
         }}
@@ -354,18 +419,10 @@ function App() {
 function Header({
   userName,
   userPhoto,
-  pct,
-  done,
-  inProg,
-  total,
   onSignOut,
 }: {
   userName: string;
   userPhoto: string;
-  pct: number;
-  done: number;
-  inProg: number;
-  total: number;
   onSignOut: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -406,24 +463,6 @@ function Header({
               </div>
             </>
           )}
-        </div>
-        <div className="mt-2 flex items-center gap-3">
-          <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
-            <motion.div
-              className="h-full bg-gradient-to-r from-emerald-400 to-sky-400"
-              initial={{ width: 0 }}
-              animate={{ width: `${pct}%` }}
-              transition={{ type: "spring", damping: 22, stiffness: 120 }}
-            />
-          </div>
-          <span className="text-xs font-semibold text-gray-900 tabular-nums w-9 text-right">
-            {pct}%
-          </span>
-        </div>
-        <div className="flex items-center gap-3 mt-1.5 text-[10px] text-gray-500">
-          <span>完了 {done}</span>
-          <span>進行中 {inProg}</span>
-          <span>合計 {total}</span>
         </div>
       </div>
     </header>

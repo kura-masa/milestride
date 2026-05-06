@@ -1,12 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { flushSync } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Node, Group, Status, ChecklistItem } from "@/lib/store";
+import { Node, Status, ChecklistItem } from "@/lib/store";
 
 export type NodeDraft = {
   title: string;
   status: Status;
-  summary: string;
   detail: string;
   groupId: string | null;
   parents: string[];
@@ -17,9 +17,7 @@ export default function NodeEditor({
   open,
   initial,
   allNodes,
-  groups,
   isNew,
-  showGroupChips = true,
   requireNewGroup = false,
   onSave,
   onCancel,
@@ -29,9 +27,7 @@ export default function NodeEditor({
   open: boolean;
   initial: Partial<NodeDraft> & { id?: string };
   allNodes: Node[];
-  groups: Group[];
   isNew: boolean;
-  showGroupChips?: boolean;
   requireNewGroup?: boolean;
   onSave: (draft: NodeDraft) => Promise<void> | void;
   onCancel: () => void;
@@ -40,16 +36,12 @@ export default function NodeEditor({
 }) {
   const [draft, setDraft] = useState<NodeDraft>(() => normalize(initial));
   const [saving, setSaving] = useState(false);
-  const [showNewGroup, setShowNewGroup] = useState(false);
-  const [newGroupTitle, setNewGroupTitle] = useState("");
   const [groupNameAtTop, setGroupNameAtTop] = useState("");
   const [groupNameError, setGroupNameError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setDraft(normalize(initial));
-      setShowNewGroup(false);
-      setNewGroupTitle("");
       setGroupNameAtTop("");
       setGroupNameError(null);
     }
@@ -57,11 +49,18 @@ export default function NodeEditor({
 
   const otherNodes = allNodes.filter((n) => n.id !== initial.id);
 
-  const addChecklist = () =>
-    setDraft((d) => ({
-      ...d,
-      checklist: [...d.checklist, { id: newChecklistId(), label: "", done: false }],
-    }));
+  const checklistInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+
+  const addChecklist = () => {
+    const id = newChecklistId();
+    flushSync(() => {
+      setDraft((d) => ({
+        ...d,
+        checklist: [...d.checklist, { id, label: "", done: false }],
+      }));
+    });
+    checklistInputRefs.current.get(id)?.focus();
+  };
 
   const updateChecklist = (id: string, patch: Partial<ChecklistItem>) =>
     setDraft((d) => ({
@@ -108,14 +107,6 @@ export default function NodeEditor({
     }
   };
 
-  const handleCreateGroup = async () => {
-    if (!newGroupTitle.trim()) return;
-    const id = await onAddGroup(newGroupTitle.trim());
-    setDraft((d) => ({ ...d, groupId: id }));
-    setShowNewGroup(false);
-    setNewGroupTitle("");
-  };
-
   return (
     <AnimatePresence>
       {open && (
@@ -125,10 +116,9 @@ export default function NodeEditor({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onCancel}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-[55] rounded-t-3xl bg-white shadow-2xl max-h-[85dvh] overflow-y-auto overscroll-contain"
+            className="fixed inset-x-0 bottom-0 z-[55] rounded-t-3xl bg-white shadow-2xl max-h-[98.5dvh] overflow-y-auto overscroll-contain"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -186,76 +176,17 @@ export default function NodeEditor({
                 />
               </Field>
 
-              {showGroupChips && !requireNewGroup && (
-                <Field label="グループ">
-                  <div className="flex flex-wrap gap-2">
-                    <Chip
-                      active={draft.groupId === null}
-                      onClick={() => setDraft({ ...draft, groupId: null })}
-                    >
-                      未分類
-                    </Chip>
-                    {groups.map((g) => (
-                      <Chip
-                        key={g.id}
-                        active={draft.groupId === g.id}
-                        onClick={() => setDraft({ ...draft, groupId: g.id })}
-                      >
-                        {g.title}
-                      </Chip>
-                    ))}
-                    {!showNewGroup ? (
-                      <button
-                        onClick={() => setShowNewGroup(true)}
-                        className="px-3 py-1.5 rounded-full text-xs font-medium text-sky-600 ring-1 ring-sky-200 active:bg-sky-50"
-                      >
-                        ＋ 新規
-                      </button>
-                    ) : (
-                      <div className="flex gap-1.5 w-full mt-1">
-                        <input
-                          className="flex-1 px-3 py-1.5 rounded-full text-xs bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none"
-                          value={newGroupTitle}
-                          onChange={(e) => setNewGroupTitle(e.target.value)}
-                          placeholder="グループ名"
-                          autoFocus
-                        />
-                        <button
-                          onClick={handleCreateGroup}
-                          className="px-3 py-1.5 rounded-full text-xs font-bold bg-sky-500 text-white"
-                        >
-                          作成
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowNewGroup(false);
-                            setNewGroupTitle("");
-                          }}
-                          className="px-2 py-1.5 rounded-full text-xs text-gray-500"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </Field>
-              )}
-
-              <Field label="一行サマリー">
+              <Field label="目的">
                 <input
                   className="w-full px-3 py-2.5 rounded-xl bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none text-sm"
-                  value={draft.summary}
-                  onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
-                  placeholder="例: 影響力の武器 第2章"
-                />
-              </Field>
-
-              <Field label="詳細">
-                <textarea
-                  className="w-full px-3 py-2.5 rounded-xl bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none text-sm min-h-[88px] resize-none"
                   value={draft.detail}
-                  onChange={(e) => setDraft({ ...draft, detail: e.target.value })}
-                  placeholder="このノードのメモ・要点・背景"
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      detail: e.target.value.replace(/\r?\n/g, ""),
+                    })
+                  }
+                  placeholder="このノードで達成したいこと"
                 />
               </Field>
 
@@ -295,6 +226,10 @@ export default function NodeEditor({
                         {c.done && "✓"}
                       </button>
                       <input
+                        ref={(el) => {
+                          if (el) checklistInputRefs.current.set(c.id, el);
+                          else checklistInputRefs.current.delete(c.id);
+                        }}
                         className="flex-1 px-2.5 py-1.5 rounded-lg bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none text-sm"
                         value={c.label}
                         onChange={(e) =>
@@ -332,7 +267,6 @@ function normalize(initial: Partial<NodeDraft>): NodeDraft {
   return {
     title: initial.title ?? "",
     status: initial.status ?? "todo",
-    summary: initial.summary ?? "",
     detail: initial.detail ?? "",
     groupId: initial.groupId ?? null,
     parents: initial.parents ?? [],

@@ -25,13 +25,13 @@ export type Node = {
   id: string;
   title: string;
   status: Status;
-  summary: string;
   detail: string;
   groupId: string | null;
   parents: string[];
   order: number;
   position?: { x: number; y: number };
   checklist: ChecklistItem[];
+  memo?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 };
@@ -117,13 +117,13 @@ export function useMutations() {
         const ref = await addDoc(nodesCol, {
           title: input.title,
           status: input.status ?? "todo",
-          summary: input.summary ?? "",
           detail: input.detail ?? "",
           groupId: input.groupId ?? null,
           parents: input.parents ?? [],
           order: input.order ?? Date.now(),
           position: input.position ?? null,
           checklist: input.checklist ?? [],
+          memo: input.memo ?? "",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
@@ -184,8 +184,17 @@ export function useMutations() {
         });
       },
       replaceChecklist: async (nodeId: string, items: ChecklistItem[]) => {
+        const total = items.length;
+        const doneCount = items.filter((c) => c.done).length;
+        const status: Status =
+          total > 0 && doneCount === total
+            ? "done"
+            : doneCount > 0
+            ? "in_progress"
+            : "todo";
         await updateDoc(doc(db, userPath(uid, "nodes", nodeId)), {
           checklist: items,
+          status,
           updatedAt: serverTimestamp(),
         });
       },
@@ -204,15 +213,35 @@ export function useMutations() {
         delete data.createdAt;
         await updateDoc(doc(db, userPath(uid, "groups", id)), data);
       },
-      deleteGroup: async (id: string, allNodes: Node[]) => {
+      deleteGroup: async (
+        id: string,
+        allNodes: Node[],
+        deleteNodes = false
+      ) => {
         const batch = writeBatch(db);
         batch.delete(doc(db, userPath(uid, "groups", id)));
-        for (const n of allNodes) {
-          if (n.groupId === id) {
-            batch.update(doc(db, userPath(uid, "nodes", n.id)), {
-              groupId: null,
-              updatedAt: serverTimestamp(),
-            });
+        if (deleteNodes) {
+          const removedIds = new Set(
+            allNodes.filter((n) => n.groupId === id).map((n) => n.id)
+          );
+          for (const n of allNodes) {
+            if (removedIds.has(n.id)) {
+              batch.delete(doc(db, userPath(uid, "nodes", n.id)));
+            } else if ((n.parents ?? []).some((p) => removedIds.has(p))) {
+              batch.update(doc(db, userPath(uid, "nodes", n.id)), {
+                parents: (n.parents ?? []).filter((p) => !removedIds.has(p)),
+                updatedAt: serverTimestamp(),
+              });
+            }
+          }
+        } else {
+          for (const n of allNodes) {
+            if (n.groupId === id) {
+              batch.update(doc(db, userPath(uid, "nodes", n.id)), {
+                groupId: null,
+                updatedAt: serverTimestamp(),
+              });
+            }
           }
         }
         await batch.commit();
