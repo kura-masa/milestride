@@ -14,7 +14,6 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useLongPress } from "@/lib/useLongPress";
 import AuthGate from "@/components/AuthGate";
-import NodeSheet from "@/components/NodeSheet";
 import ActionMenu from "@/components/ActionMenu";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import RenameDialog from "@/components/RenameDialog";
@@ -42,13 +41,6 @@ function App() {
   const [mode, setMode] = useState<Mode>("focus");
   const [overviewLayout, setOverviewLayout] = useState<OverviewLayout>("grouped");
   const [activeTab, setActiveTab] = useState<string>(UNGROUPED);
-  const [sheetId, setSheetId] = useState<string | null>(null);
-  const sheet = useMemo(
-    () => (sheetId ? nodes.find((n) => n.id === sheetId) ?? null : null),
-    [sheetId, nodes]
-  );
-  const setSheet = (n: Node | null) => setSheetId(n?.id ?? null);
-  const [menu, setMenu] = useState<Node | null>(null);
   const [editor, setEditor] = useState<{
     node: Node | null;
     requireNewGroup?: boolean;
@@ -175,7 +167,6 @@ function App() {
     await ops.removeFromAllParents(confirmDel.id, nodes);
     await ops.deleteNode(confirmDel.id);
     setConfirmDel(null);
-    if (sheet?.id === confirmDel.id) setSheet(null);
   };
 
   return (
@@ -226,8 +217,8 @@ function App() {
             <FocusView
               nodes={currentTab?.nodes ?? []}
               allNodes={nodes}
-              onTap={setSheet}
-              onLongPress={setMenu}
+              onTap={(n) => setEditor({ node: n })}
+              onLongPress={() => {}}
               onAdd={() => setEditor({ node: null })}
             />
           </motion.div>
@@ -252,7 +243,7 @@ function App() {
                 onPick={(n, tabId) => {
                   setActiveTab(tabId);
                   setMode("focus");
-                  setTimeout(() => setSheet(n), 220);
+                  setTimeout(() => setEditor({ node: n }), 220);
                 }}
                 onPickGroup={(tabId) => {
                   setActiveTab(tabId);
@@ -263,8 +254,8 @@ function App() {
               <UnifiedField
                 nodes={nodes}
                 groups={groups}
-                onTap={setSheet}
-                onLongPress={setMenu}
+                onTap={(n) => setEditor({ node: n })}
+                onLongPress={() => {}}
               />
             )}
           </motion.div>
@@ -287,26 +278,6 @@ function App() {
         }}
       />
 
-      <NodeSheet
-        node={sheet}
-        onClose={() => setSheet(null)}
-        onSaveMemo={(n, memo) => ops.saveMemo(n.id, memo)}
-      />
-
-      <ActionMenu
-        open={!!menu}
-        title={menu?.title ?? ""}
-        onClose={() => setMenu(null)}
-        onEdit={() => {
-          setEditor({ node: menu });
-          setMenu(null);
-        }}
-        onDelete={() => {
-          setConfirmDel(menu);
-          setMenu(null);
-        }}
-      />
-
       <NodeEditor
         open={!!editor}
         isNew={!editor?.node}
@@ -315,6 +286,14 @@ function App() {
         requireNewGroup={editor?.requireNewGroup ?? false}
         onSave={handleSave}
         onCancel={() => setEditor(null)}
+        onDelete={
+          editor?.node
+            ? () => {
+                setConfirmDel(editor.node);
+                setEditor(null);
+              }
+            : undefined
+        }
         onAddGroup={async (title) => {
           const id = await ops.addGroup(title);
           return id;

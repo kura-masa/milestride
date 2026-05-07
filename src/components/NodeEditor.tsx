@@ -20,6 +20,7 @@ export default function NodeEditor({
   requireNewGroup = false,
   onSave,
   onCancel,
+  onDelete,
   onAddGroup,
 }: {
   open: boolean;
@@ -29,6 +30,7 @@ export default function NodeEditor({
   requireNewGroup?: boolean;
   onSave: (draft: NodeDraft) => Promise<void> | void;
   onCancel: () => void;
+  onDelete?: () => void;
   onAddGroup: (title: string) => Promise<string>;
 }) {
   const [draft, setDraft] = useState<NodeDraft>(() => normalize(initial));
@@ -95,20 +97,30 @@ export default function NodeEditor({
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
           >
-            <div className="sticky top-0 z-10 bg-white pt-3 pb-3 px-5 border-b border-gray-100 flex items-center justify-between">
+            <div className="sticky top-0 z-10 bg-white pt-3 pb-3 px-5 border-b border-gray-100 flex items-center justify-between gap-2">
               <button
                 onClick={onCancel}
                 className="text-sm font-medium text-gray-500"
               >
                 キャンセル
               </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !draft.title.trim()}
-                className="text-sm font-bold text-emerald-600 disabled:text-gray-300"
-              >
-                {saving ? "保存中…" : "保存"}
-              </button>
+              <div className="flex items-center gap-3">
+                {!isNew && onDelete && (
+                  <button
+                    onClick={onDelete}
+                    className="text-sm font-medium text-red-600 active:text-red-700"
+                  >
+                    削除
+                  </button>
+                )}
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !draft.title.trim()}
+                  className="text-sm font-bold text-emerald-600 disabled:text-gray-300"
+                >
+                  {saving ? "保存中…" : "保存"}
+                </button>
+              </div>
             </div>
 
             <div className="p-5 space-y-5">
