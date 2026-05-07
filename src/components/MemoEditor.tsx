@@ -157,24 +157,10 @@ const InlineCheck = Node.create({
 
   addKeyboardShortcuts() {
     return {
-      Enter: () => {
-        const { state } = this.editor;
-        const { $from } = state.selection;
-        for (let d = $from.depth; d > 0; d--) {
-          if ($from.node(d).type.name === "inlineCheck") {
-            const after = $from.after(d);
-            // Escape the chip, then split the paragraph so the cursor lands
-            // on a fresh new line below.
-            return this.editor
-              .chain()
-              .setTextSelection(after)
-              .splitBlock()
-              .focus()
-              .run();
-          }
-        }
-        return false;
-      },
+      // Note: Enter is handled exclusively via the beforeinput plugin
+      // (insertParagraph / insertLineBreak) so that desktop, iOS and
+      // Android all flow through one handler. A keydown handler here
+      // would cause a double dispatch on platforms that fire both.
       ArrowRight: () => {
         const { state } = this.editor;
         const { $from, empty } = state.selection;
