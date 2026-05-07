@@ -236,73 +236,10 @@ const InlineCheck = Node.create({
         }
         return false;
       },
-      Backspace: () => {
-        const { state, view } = this.editor;
-        const { $from, empty } = state.selection;
-        if (!empty) return false;
-
-        // Case A: caret inside an inlineCheck
-        for (let d = $from.depth; d > 0; d--) {
-          if ($from.node(d).type.name === "inlineCheck") {
-            const node = $from.node(d);
-            const start = $from.start(d);
-            const contentSize = node.content.size;
-            const atStart = $from.pos === start;
-
-            // Empty chip + caret at start → remove the whole chip
-            if (atStart && contentSize === 0) {
-              const before = $from.before(d);
-              const after = $from.after(d);
-              const tr = state.tr.delete(before, after);
-              tr.setSelection(TextSelection.create(tr.doc, before));
-              view.dispatch(tr);
-              view.focus();
-              return true;
-            }
-
-            // Special: caret at the only-ZWS position → remove the chip
-            const onlyZws =
-              $from.pos === start + 1 && node.textContent === "​";
-            if (onlyZws) {
-              const before = $from.before(d);
-              const after = $from.after(d);
-              const tr = state.tr.delete(before, after);
-              tr.setSelection(TextSelection.create(tr.doc, before));
-              view.dispatch(tr);
-              view.focus();
-              return true;
-            }
-
-            // Otherwise: caret has chars to its left INSIDE the chip — delete
-            // one char and keep caret inside the chip (don't escape).
-            if ($from.pos > start) {
-              const tr = state.tr.delete($from.pos - 1, $from.pos);
-              view.dispatch(tr);
-              view.focus();
-              return true;
-            }
-            break;
-          }
-        }
-
-        // Case B: caret directly after an empty inlineCheck chip → remove it
-        const nodeBefore = $from.nodeBefore;
-        if (
-          nodeBefore &&
-          nodeBefore.type.name === "inlineCheck" &&
-          (nodeBefore.textContent === "" ||
-            nodeBefore.textContent === "​")
-        ) {
-          const before = $from.pos - nodeBefore.nodeSize;
-          const tr = state.tr.delete(before, $from.pos);
-          tr.setSelection(TextSelection.create(tr.doc, before));
-          view.dispatch(tr);
-          view.focus();
-          return true;
-        }
-
-        return false;
-      },
+      // Note: Backspace is handled exclusively via the beforeinput plugin
+      // (deleteContentBackward) so that keymap + beforeinput don't both
+      // fire and cause double deletes (e.g. 1-char chip → empty chip → gone
+      // in a single key press).
       ArrowLeft: () => {
         const { state, view } = this.editor;
         const { $from, empty } = state.selection;
