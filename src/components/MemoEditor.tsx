@@ -124,29 +124,81 @@ const InlineCheck = Node.create({
           handleDOMEvents: {
             beforeinput: (view, e: Event) => {
               const ev = e as InputEvent;
-              if (
-                ev.inputType !== "insertParagraph" &&
-                ev.inputType !== "insertLineBreak"
-              ) {
-                return false;
-              }
               const { $from, empty } = view.state.selection;
               if (!empty) return false;
+
+              // Find enclosing inlineCheck
+              let chipDepth = -1;
               for (let d = $from.depth; d > 0; d--) {
                 if ($from.node(d).type.name === "inlineCheck") {
+                  chipDepth = d;
+                  break;
+                }
+              }
+
+              // ── Enter inside chip → escape + split (Android IME) ──
+              if (
+                ev.inputType === "insertParagraph" ||
+                ev.inputType === "insertLineBreak"
+              ) {
+                if (chipDepth === -1) return false;
+                ev.preventDefault();
+                const after = $from.after(chipDepth);
+                ext.editor
+                  .chain()
+                  .setTextSelection(after)
+                  .splitBlock()
+                  .focus()
+                  .run();
+                return true;
+              }
+
+              // ── Backspace progressive removal ──
+              if (ev.inputType === "deleteContentBackward") {
+                if (chipDepth !== -1) {
+                  const node = $from.node(chipDepth);
+                  const start = $from.start(chipDepth);
+                  const contentSize = node.content.size;
+                  const atStart = $from.pos === start;
+                  const onlyZws =
+                    $from.pos === start + 1 && node.textContent === "​";
+                  if ((atStart && contentSize === 0) || onlyZws) {
+                    ev.preventDefault();
+                    const before = $from.before(chipDepth);
+                    const after = $from.after(chipDepth);
+                    const tr = view.state.tr.delete(before, after);
+                    tr.setSelection(TextSelection.create(tr.doc, before));
+                    view.dispatch(tr);
+                    return true;
+                  }
+                  if ($from.pos > start) {
+                    ev.preventDefault();
+                    const tr = view.state.tr.delete(
+                      $from.pos - 1,
+                      $from.pos
+                    );
+                    view.dispatch(tr);
+                    return true;
+                  }
+                  return false;
+                }
+                // Caret directly after an empty chip
+                const nodeBefore = $from.nodeBefore;
+                if (
+                  nodeBefore &&
+                  nodeBefore.type.name === "inlineCheck" &&
+                  (nodeBefore.textContent === "" ||
+                    nodeBefore.textContent === "​")
+                ) {
                   ev.preventDefault();
-                  const after = $from.after(d);
-                  // Move caret outside the chip then split the surrounding
-                  // paragraph so a new line is created below.
-                  ext.editor
-                    .chain()
-                    .setTextSelection(after)
-                    .splitBlock()
-                    .focus()
-                    .run();
+                  const before = $from.pos - nodeBefore.nodeSize;
+                  const tr = view.state.tr.delete(before, $from.pos);
+                  tr.setSelection(TextSelection.create(tr.doc, before));
+                  view.dispatch(tr);
                   return true;
                 }
               }
+
               return false;
             },
           },
@@ -162,22 +214,22 @@ const InlineCheck = Node.create({
       // Android all flow through one handler. A keydown handler here
       // would cause a double dispatch on platforms that fire both.
       ArrowRight: () => {
-        const { state } = this.editor;
+        const { state, view } = this.editor;
         const { $from, empty } = state.selection;
         if (!empty) return false;
         for (let d = $from.depth; d > 0; d--) {
           if ($from.node(d).type.name === "inlineCheck") {
             const end = $from.end(d);
-            // Account for trailing ZWS placeholder so a single press escapes
             const node = $from.node(d);
             const trailingZws = node.textContent.endsWith("​") ? 1 : 0;
             if ($from.pos >= end - trailingZws) {
               const after = $from.after(d);
-              return this.editor
-                .chain()
-                .focus()
-                .setTextSelection(after)
-                .run();
+              const tr = state.tr.setSelection(
+                TextSelection.create(state.doc, after)
+              );
+              view.dispatch(tr);
+              view.focus();
+              return true;
             }
             break;
           }
@@ -189,15 +241,16 @@ const InlineCheck = Node.create({
         const { $from, empty } = state.selection;
         if (!empty) return false;
 
-        // Case A: caret inside an inlineCheck and the chip is empty
+        // Case A: caret inside an inlineCheck
         for (let d = $from.depth; d > 0; d--) {
           if ($from.node(d).type.name === "inlineCheck") {
             const node = $from.node(d);
             const start = $from.start(d);
+            const contentSize = node.content.size;
             const atStart = $from.pos === start;
-            const onlyZws =
-              $from.pos === start + 1 && node.textContent === "​";
-            if (atStart || onlyZws) {
+
+            // Empty chip + caret at start → remove the whole chip
+            if (atStart && contentSize === 0) {
               const before = $from.before(d);
               const after = $from.after(d);
               const tr = state.tr.delete(before, after);
@@ -206,11 +259,33 @@ const InlineCheck = Node.create({
               view.focus();
               return true;
             }
+
+            // Special: caret at the only-ZWS position → remove the chip
+            const onlyZws =
+              $from.pos === start + 1 && node.textContent === "​";
+            if (onlyZws) {
+              const before = $from.before(d);
+              const after = $from.after(d);
+              const tr = state.tr.delete(before, after);
+              tr.setSelection(TextSelection.create(tr.doc, before));
+              view.dispatch(tr);
+              view.focus();
+              return true;
+            }
+
+            // Otherwise: caret has chars to its left INSIDE the chip — delete
+            // one char and keep caret inside the chip (don't escape).
+            if ($from.pos > start) {
+              const tr = state.tr.delete($from.pos - 1, $from.pos);
+              view.dispatch(tr);
+              view.focus();
+              return true;
+            }
             break;
           }
         }
 
-        // Case B: caret directly after an empty inlineCheck chip
+        // Case B: caret directly after an empty inlineCheck chip → remove it
         const nodeBefore = $from.nodeBefore;
         if (
           nodeBefore &&
@@ -229,7 +304,7 @@ const InlineCheck = Node.create({
         return false;
       },
       ArrowLeft: () => {
-        const { state } = this.editor;
+        const { state, view } = this.editor;
         const { $from, empty } = state.selection;
         if (!empty) return false;
         for (let d = $from.depth; d > 0; d--) {
@@ -237,11 +312,12 @@ const InlineCheck = Node.create({
             const start = $from.start(d);
             if ($from.pos === start) {
               const before = $from.before(d);
-              return this.editor
-                .chain()
-                .focus()
-                .setTextSelection(before)
-                .run();
+              const tr = state.tr.setSelection(
+                TextSelection.create(state.doc, before)
+              );
+              view.dispatch(tr);
+              view.focus();
+              return true;
             }
             break;
           }
