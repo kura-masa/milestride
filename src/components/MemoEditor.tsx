@@ -102,6 +102,49 @@ const InlineCheck = Node.create({
         }
         return false;
       },
+      ArrowRight: () => {
+        const { state } = this.editor;
+        const { $from, empty } = state.selection;
+        if (!empty) return false;
+        for (let d = $from.depth; d > 0; d--) {
+          if ($from.node(d).type.name === "inlineCheck") {
+            const end = $from.end(d);
+            // Account for trailing ZWS placeholder so a single press escapes
+            const node = $from.node(d);
+            const trailingZws = node.textContent.endsWith("​") ? 1 : 0;
+            if ($from.pos >= end - trailingZws) {
+              const after = $from.after(d);
+              return this.editor
+                .chain()
+                .focus()
+                .setTextSelection(after)
+                .run();
+            }
+            break;
+          }
+        }
+        return false;
+      },
+      ArrowLeft: () => {
+        const { state } = this.editor;
+        const { $from, empty } = state.selection;
+        if (!empty) return false;
+        for (let d = $from.depth; d > 0; d--) {
+          if ($from.node(d).type.name === "inlineCheck") {
+            const start = $from.start(d);
+            if ($from.pos === start) {
+              const before = $from.before(d);
+              return this.editor
+                .chain()
+                .focus()
+                .setTextSelection(before)
+                .run();
+            }
+            break;
+          }
+        }
+        return false;
+      },
     };
   },
 });

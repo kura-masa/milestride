@@ -54,6 +54,7 @@ test.describe("MemoEditor inline check insertion (mobile WebKit)", () => {
     await page.locator('[data-testid="add-item"]').tap();
     await page.waitForTimeout(100);
     await page.keyboard.type("foo");
+    // Single ArrowRight should escape the chip
     await page.keyboard.press("ArrowRight");
     await page.keyboard.type("。");
 
@@ -61,7 +62,7 @@ test.describe("MemoEditor inline check insertion (mobile WebKit)", () => {
       .locator('[data-testid="serialized"]')
       .textContent();
     console.log("After-escape memo:", memo);
-    expect(memo).toContain("[ ]foo[/]");
-    expect(memo).toContain("。");
+    // Expected: foo inside the chip, 。 outside (after the chip)
+    expect(memo).toContain("[ ]foo[/]。");
   });
 });
