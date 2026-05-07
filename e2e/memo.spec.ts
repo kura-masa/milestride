@@ -48,6 +48,28 @@ test.describe("MemoEditor inline check insertion (mobile WebKit)", () => {
     expect(labelText.replace(/​/g, "")).toBe("1章を読む");
   });
 
+  test("tapping + twice yields exactly 2 chips (not 3)", async ({ page }) => {
+    const editor = page.locator(".tiptap");
+    await editor.click();
+    const addBtn = page.locator('[data-testid="add-item"]');
+    await addBtn.tap();
+    await page.waitForTimeout(120);
+    await page.keyboard.type("aaa");
+    await addBtn.tap();
+    await page.waitForTimeout(120);
+    await page.keyboard.type("bbb");
+
+    const memo = await page
+      .locator('[data-testid="serialized"]')
+      .textContent();
+    console.log("Two-tap memo:", memo);
+    // Expect exactly two chips: aaa then bbb
+    const chipCount = (memo?.match(/\[ \]/g) || []).length;
+    expect(chipCount).toBe(2);
+    expect(memo).toContain("[ ]aaa[/]");
+    expect(memo).toContain("[ ]bbb[/]");
+  });
+
   test("type after escaping the chip with arrow right", async ({ page }) => {
     const editor = page.locator(".tiptap");
     await editor.click();

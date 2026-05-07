@@ -289,6 +289,16 @@ export const MemoEditor = forwardRef<
       addItem: () => {
         if (!editor) return;
         const { state, view } = editor;
+        // If the caret is inside an existing inline check, place the new chip
+        // immediately AFTER it (don't split the existing chip).
+        const $from = state.selection.$from;
+        let pos = state.selection.from;
+        for (let d = $from.depth; d > 0; d--) {
+          if ($from.node(d).type.name === "inlineCheck") {
+            pos = $from.after(d);
+            break;
+          }
+        }
         // Insert with a zero-width space inside so mobile WebKit has an
         // actual text node to anchor the caret on — empty inline nodes are
         // unreliable for caret placement.
@@ -296,9 +306,8 @@ export const MemoEditor = forwardRef<
           { checked: false },
           state.schema.text("​")
         );
-        const pos = state.selection.from;
         const tr = state.tr.insert(pos, node);
-        // pos+1 = inside, before the ZWS. Typing inserts here.
+        // pos+1 = inside the new chip, before the ZWS. Typing inserts here.
         tr.setSelection(TextSelection.create(tr.doc, pos + 1));
         view.dispatch(tr);
         view.focus();
