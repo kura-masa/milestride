@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useImperativeHandle, forwardRef } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
-import { TextSelection } from "@tiptap/pm/state";
+import { TextSelection, Plugin } from "@tiptap/pm/state";
 import {
   useEditor,
   EditorContent,
@@ -85,6 +85,71 @@ const InlineCheck = Node.create({
     return ReactNodeViewRenderer(InlineCheckView);
   },
 
+  addProseMirrorPlugins() {
+    return [
+      // Strip the ZWS placeholder once a chip has any real content so the
+      // chip text stays clean (no invisible chars in saved memo, no
+      // double-position weirdness for Backspace).
+      new Plugin({
+        appendTransaction(transactions, _oldState, newState) {
+          if (!transactions.some((t) => t.docChanged)) return null;
+          let tr = newState.tr;
+          let modified = false;
+          newState.doc.descendants((node, pos) => {
+            if (node.type.name !== "inlineCheck") return;
+            const text = node.textContent;
+            if (text.length <= 1) return; // empty or only ZWS — keep
+            if (!text.includes("​")) return;
+            // Find the ZWS char position(s) inside this node and remove them
+            for (let i = 0; i < text.length; i++) {
+              if (text[i] === "​") {
+                const charPos = pos + 1 + i;
+                tr = tr.delete(
+                  tr.mapping.map(charPos),
+                  tr.mapping.map(charPos + 1)
+                );
+                modified = true;
+              }
+            }
+          });
+          return modified ? tr : null;
+        },
+      }),
+      // Android Chrome dispatches Enter inside an IME composition as a
+      // beforeinput "insertParagraph" event (not keydown). Intercept those
+      // to escape the inline check instead of replacing its content.
+      new Plugin({
+        props: {
+          handleDOMEvents: {
+            beforeinput: (view, e: Event) => {
+              const ev = e as InputEvent;
+              if (
+                ev.inputType !== "insertParagraph" &&
+                ev.inputType !== "insertLineBreak"
+              ) {
+                return false;
+              }
+              const { $from, empty } = view.state.selection;
+              if (!empty) return false;
+              for (let d = $from.depth; d > 0; d--) {
+                if ($from.node(d).type.name === "inlineCheck") {
+                  ev.preventDefault();
+                  const after = $from.after(d);
+                  const tr = view.state.tr.setSelection(
+                    TextSelection.create(view.state.doc, after)
+                  );
+                  view.dispatch(tr);
+                  return true;
+                }
+              }
+              return false;
+            },
+          },
+        },
+      }),
+    ];
+  },
+
   addKeyboardShortcuts() {
     return {
       Enter: () => {
@@ -123,6 +188,50 @@ const InlineCheck = Node.create({
             break;
           }
         }
+        return false;
+      },
+      Backspace: () => {
+        const { state, view } = this.editor;
+        const { $from, empty } = state.selection;
+        if (!empty) return false;
+
+        // Case A: caret inside an inlineCheck and the chip is empty
+        for (let d = $from.depth; d > 0; d--) {
+          if ($from.node(d).type.name === "inlineCheck") {
+            const node = $from.node(d);
+            const start = $from.start(d);
+            const atStart = $from.pos === start;
+            const onlyZws =
+              $from.pos === start + 1 && node.textContent === "​";
+            if (atStart || onlyZws) {
+              const before = $from.before(d);
+              const after = $from.after(d);
+              const tr = state.tr.delete(before, after);
+              tr.setSelection(TextSelection.create(tr.doc, before));
+              view.dispatch(tr);
+              view.focus();
+              return true;
+            }
+            break;
+          }
+        }
+
+        // Case B: caret directly after an empty inlineCheck chip
+        const nodeBefore = $from.nodeBefore;
+        if (
+          nodeBefore &&
+          nodeBefore.type.name === "inlineCheck" &&
+          (nodeBefore.textContent === "" ||
+            nodeBefore.textContent === "​")
+        ) {
+          const before = $from.pos - nodeBefore.nodeSize;
+          const tr = state.tr.delete(before, $from.pos);
+          tr.setSelection(TextSelection.create(tr.doc, before));
+          view.dispatch(tr);
+          view.focus();
+          return true;
+        }
+
         return false;
       },
       ArrowLeft: () => {
