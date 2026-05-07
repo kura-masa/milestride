@@ -86,6 +86,7 @@ const InlineCheck = Node.create({
   },
 
   addProseMirrorPlugins() {
+    const ext = this;
     return [
       // Strip the ZWS placeholder once a chip has any real content so the
       // chip text stays clean (no invisible chars in saved memo, no
@@ -135,10 +136,14 @@ const InlineCheck = Node.create({
                 if ($from.node(d).type.name === "inlineCheck") {
                   ev.preventDefault();
                   const after = $from.after(d);
-                  const tr = view.state.tr.setSelection(
-                    TextSelection.create(view.state.doc, after)
-                  );
-                  view.dispatch(tr);
+                  // Move caret outside the chip then split the surrounding
+                  // paragraph so a new line is created below.
+                  ext.editor
+                    .chain()
+                    .setTextSelection(after)
+                    .splitBlock()
+                    .focus()
+                    .run();
                   return true;
                 }
               }
@@ -158,10 +163,13 @@ const InlineCheck = Node.create({
         for (let d = $from.depth; d > 0; d--) {
           if ($from.node(d).type.name === "inlineCheck") {
             const after = $from.after(d);
+            // Escape the chip, then split the paragraph so the cursor lands
+            // on a fresh new line below.
             return this.editor
               .chain()
-              .focus()
               .setTextSelection(after)
+              .splitBlock()
+              .focus()
               .run();
           }
         }

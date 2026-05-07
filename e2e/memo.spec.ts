@@ -6,19 +6,22 @@ test.describe("MemoEditor — Android/Chromium bug reproduction", () => {
     await page.waitForSelector('[data-testid="editor-wrapper"] .tiptap');
   });
 
-  test("enter inside chip should NOT clear the chip text", async ({ page }) => {
+  test("enter inside chip preserves chip text and creates a new line below", async ({ page }) => {
     const editor = page.locator(".tiptap");
     await editor.click();
     await page.locator('[data-testid="add-item"]').tap();
     await page.waitForTimeout(150);
     await page.keyboard.type("foo");
     await page.keyboard.press("Enter");
-    // After Enter, caret should be after the chip — chip text "foo" must remain
+    await page.keyboard.type("next");
     const memo = await page
       .locator('[data-testid="serialized"]')
       .textContent();
     console.log("After Enter memo:", memo);
     expect(memo).toContain("[ ]foo[/]");
+    expect(memo).toContain("next");
+    // Chip and "next" should be on different lines
+    expect(memo).toContain("[/]\\nnext");
   });
 
   test("backspace immediately after the chip removes one char of label, not the whole chip", async ({
