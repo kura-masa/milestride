@@ -160,8 +160,7 @@ export default function NodeEditor({
               </Field>
 
               <Field
-                label="親ノード（依存）"
-                hint="完了が必要な前提ノード。複数選択可"
+                label="一個前のノード"
               >
                 {otherNodes.length === 0 ? (
                   <div className="text-xs text-gray-400 px-1">他のノードがまだありません</div>
