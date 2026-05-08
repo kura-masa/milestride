@@ -88,9 +88,13 @@ const InlineCheck = Node.create({
   addProseMirrorPlugins() {
     const ext = this;
     return [
-      // Strip the ZWS placeholder once a chip has any real content so the
-      // chip text stays clean (no invisible chars in saved memo, no
-      // double-position weirdness for Backspace).
+      // Maintain the invariant that every inlineCheck contains either:
+      //   (a) a single ZWS placeholder (visually empty, but the browser can
+      //       anchor the caret inside), OR
+      //   (b) only real user-typed characters (no ZWS).
+      // This means: as soon as the user types something, the ZWS is dropped;
+      // as soon as the chip becomes truly empty, a ZWS is re-inserted so the
+      // caret stays inside instead of escaping to the surrounding paragraph.
       new Plugin({
         appendTransaction(transactions, _oldState, newState) {
           if (!transactions.some((t) => t.docChanged)) return null;
@@ -99,17 +103,26 @@ const InlineCheck = Node.create({
           newState.doc.descendants((node, pos) => {
             if (node.type.name !== "inlineCheck") return;
             const text = node.textContent;
-            if (text.length <= 1) return; // empty or only ZWS — keep
-            if (!text.includes("​")) return;
-            // Find the ZWS char position(s) inside this node and remove them
-            for (let i = 0; i < text.length; i++) {
-              if (text[i] === "​") {
-                const charPos = pos + 1 + i;
-                tr = tr.delete(
-                  tr.mapping.map(charPos),
-                  tr.mapping.map(charPos + 1)
-                );
-                modified = true;
+
+            if (text === "") {
+              // Empty chip — re-insert ZWS so caret has a valid anchor
+              const insertAt = tr.mapping.map(pos + 1);
+              tr = tr.insert(insertAt, newState.schema.text("​"));
+              modified = true;
+              return;
+            }
+
+            if (text.length > 1 && text.includes("​")) {
+              // Has ZWS plus real content — strip ZWS char(s)
+              for (let i = 0; i < text.length; i++) {
+                if (text[i] === "​") {
+                  const charPos = pos + 1 + i;
+                  tr = tr.delete(
+                    tr.mapping.map(charPos),
+                    tr.mapping.map(charPos + 1)
+                  );
+                  modified = true;
+                }
               }
             }
           });
@@ -158,11 +171,12 @@ const InlineCheck = Node.create({
                 if (chipDepth !== -1) {
                   const node = $from.node(chipDepth);
                   const start = $from.start(chipDepth);
-                  const contentSize = node.content.size;
-                  const atStart = $from.pos === start;
-                  const onlyZws =
-                    $from.pos === start + 1 && node.textContent === "​";
-                  if ((atStart && contentSize === 0) || onlyZws) {
+                  const text = node.textContent;
+                  const effectivelyEmpty = text === "" || text === "​";
+
+                  // Effectively empty chip + caret anywhere inside → delete
+                  // the chip itself (this is the "second backspace" case).
+                  if (effectivelyEmpty) {
                     ev.preventDefault();
                     const before = $from.before(chipDepth);
                     const after = $from.after(chipDepth);
@@ -171,6 +185,10 @@ const InlineCheck = Node.create({
                     view.dispatch(tr);
                     return true;
                   }
+
+                  // Chip has real content + caret has chars to its left →
+                  // delete one char and KEEP caret inside (the appendTrans
+                  // will re-insert a ZWS if this empties the chip).
                   if ($from.pos > start) {
                     ev.preventDefault();
                     const tr = view.state.tr.delete(
@@ -182,7 +200,7 @@ const InlineCheck = Node.create({
                   }
                   return false;
                 }
-                // Caret directly after an empty chip
+                // Caret directly after an effectively-empty chip → delete it
                 const nodeBefore = $from.nodeBefore;
                 if (
                   nodeBefore &&
