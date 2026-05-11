@@ -83,7 +83,7 @@ html, body {
 .inline-check.is-checked .inline-check-label {
   color: #6b7280;
   text-decoration: line-through;
-  font-weight: 400;
+  /* keep font-weight identical to unchecked to avoid baseline shift */
 }
 
 /* Empty chip: show only the checkbox (no padding, border, or label space) */
