@@ -206,6 +206,23 @@ export default function NodeEditor({
 
               <div className="h-4" />
             </div>
+
+            {/* Floating "+ 項目を追加" — sticks to the bottom-right of the
+                visible modal area so the user doesn't have to scroll up. */}
+            <div className="sticky bottom-3 z-20 flex justify-end px-4 pointer-events-none">
+              <button
+                type="button"
+                aria-label="項目を追加"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  memoEditorRef.current?.addItem();
+                }}
+                onClick={(e) => e.preventDefault()}
+                className="pointer-events-auto w-12 h-12 rounded-full bg-sky-500 text-white text-2xl font-bold shadow-lg active:bg-sky-600 flex items-center justify-center"
+              >
+                ＋
+              </button>
+            </div>
           </motion.div>
         </>
       )}
