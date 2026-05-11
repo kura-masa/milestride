@@ -85,3 +85,14 @@ html, body {
   text-decoration: line-through;
   font-weight: 400;
 }
+
+/* Empty chip: show only the checkbox (no padding, border, or label space) */
+.inline-check.is-empty {
+  padding: 0;
+  gap: 0;
+  background: transparent;
+  border-color: transparent;
+}
+.inline-check.is-empty .inline-check-label {
+  min-width: 0;
+}

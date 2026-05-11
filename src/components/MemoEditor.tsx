@@ -25,11 +25,16 @@ function escapeHtml(s: string) {
 // React NodeView for the inline check chip
 function InlineCheckView({ node, updateAttributes }: NodeViewProps) {
   const checked = Boolean(node.attrs.checked);
+  const text = node.textContent.replace(/​/g, "");
+  const isEmpty = text === "";
   return (
     <NodeViewWrapper
       as="span"
-      className={`inline-check ${checked ? "is-checked" : ""}`}
+      className={`inline-check ${checked ? "is-checked" : ""} ${
+        isEmpty ? "is-empty" : ""
+      }`}
       data-checked={checked}
+      data-empty={isEmpty}
     >
       <span
         contentEditable={false}

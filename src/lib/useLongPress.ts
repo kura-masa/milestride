@@ -33,6 +33,9 @@ export function useLongPress({
       timer.current = null;
     }
     startPos.current = null;
+    // Mark as handled so a subsequent touchend doesn't fire onTap.
+    // (Scrolling: touchstart → touchmove cancels → touchend should NOT tap.)
+    fired.current = true;
   }, []);
 
   const finish = useCallback(() => {
