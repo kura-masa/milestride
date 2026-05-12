@@ -7,54 +7,62 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex-1 flex items-center justify-center bg-gradient-to-b from-slate-50 to-white">
-        <div className="text-sm text-gray-400">読み込み中…</div>
+      <div className="min-h-screen flex-1 flex items-center justify-center bg-[var(--bg-base)]">
+        <div className="text-sm text-[var(--text-muted)]">読み込み中…</div>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen flex-1 flex items-center justify-center bg-gradient-to-b from-slate-50 via-sky-50 to-white px-6">
+      <div className="min-h-screen flex-1 flex items-center justify-center bg-[var(--bg-base)] px-6">
         <div className="max-w-sm w-full text-center">
-          <div className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Milestride</div>
-          <p className="text-sm text-gray-500 mb-6">
-            やりたいことをロードマップで<br />見える化して進めるアプリ
+          <div className="font-quest text-3xl font-bold tracking-[0.15em] text-[var(--accent-gold)] mb-2">
+            MILESTRIDE
+          </div>
+          <p className="text-sm text-[var(--text-secondary)] mb-6">
+            冒険者として、目標までの道のりを<br />クエストとして攻略する
           </p>
 
-          <div className="mb-8 rounded-2xl bg-white ring-1 ring-gray-200 shadow-sm px-5 py-5 text-left">
-            <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-3 text-center">
-              例: 影響力の武器
+          <div className="mb-8 rounded-2xl bg-[var(--bg-panel)] ring-1 ring-[var(--ring-soft)] shadow-sm px-5 py-5 text-left">
+            <div className="font-quest text-[10px] font-bold text-[var(--accent-purple)] tracking-wider uppercase mb-3 text-center">
+              エリア: 影響力の武器
             </div>
             <div className="flex flex-col items-center gap-1">
-              <div className="w-[200px] rounded-2xl ring-2 ring-emerald-400 bg-gradient-to-br from-emerald-50 to-emerald-100 px-3 py-2.5 shadow-sm">
-                <div className="text-xs font-semibold text-gray-900">
-                  <span className="text-emerald-500 mr-1">✓</span>
+              <div className="w-[220px] rounded-xl ring-1 ring-[var(--accent-emerald)]/60 bg-[var(--bg-elev)] px-3 py-2.5 shadow-sm">
+                <div className="font-quest text-[9px] font-bold text-[var(--accent-emerald)] tracking-wider uppercase mb-1">
+                  Lv.1 Quest
+                </div>
+                <div className="text-xs font-semibold text-[var(--text-primary)]">
+                  <span className="text-[var(--accent-emerald)] mr-1">✓</span>
                   返報性の原理を読む
                 </div>
-                <div className="mt-1.5 h-1 w-full rounded-full bg-white/70 overflow-hidden">
-                  <div className="h-full w-full bg-emerald-400" />
+                <div className="mt-1.5 h-1 w-full rounded-full bg-[var(--bg-base)] overflow-hidden">
+                  <div className="h-full w-full bg-[var(--accent-emerald)]" />
                 </div>
               </div>
-              <div className="h-5 w-px bg-gradient-to-b from-emerald-300 to-amber-300" />
-              <div className="w-[200px] rounded-2xl ring-2 ring-amber-400 bg-gradient-to-br from-amber-50 to-orange-100 px-3 py-2.5 shadow-sm">
-                <div className="text-xs font-semibold text-gray-900">
-                  <span className="text-amber-500 mr-1">◐</span>
+              <div className="h-5 w-px bg-gradient-to-b from-[var(--accent-emerald)] to-[var(--accent-blue)]" />
+              <div className="w-[220px] rounded-xl ring-1 ring-[var(--accent-blue)]/60 bg-[var(--bg-elev)] px-3 py-2.5 shadow-sm">
+                <div className="font-quest text-[9px] font-bold text-[var(--accent-blue)] tracking-wider uppercase mb-1">
+                  Lv.2 Quest
+                </div>
+                <div className="text-xs font-semibold text-[var(--text-primary)]">
+                  <span className="text-[var(--accent-blue)] mr-1">◐</span>
                   顧客提案で先に価値提供
                 </div>
-                <div className="mt-1.5 h-1 w-full rounded-full bg-white/70 overflow-hidden">
-                  <div className="h-full w-1/2 bg-amber-400" />
+                <div className="mt-1.5 h-1 w-full rounded-full bg-[var(--bg-base)] overflow-hidden">
+                  <div className="h-full w-1/2 bg-[var(--accent-blue)]" />
                 </div>
               </div>
             </div>
-            <div className="mt-3 text-[10px] text-gray-400 text-center leading-snug">
-              読んだ内容を実務で試す流れを<br />一つずつチェックして進めます
+            <div className="mt-3 text-[10px] text-[var(--text-muted)] text-center leading-snug">
+              読んだ内容を実戦で試す流れを<br />ひとつずつクリアして進めます
             </div>
           </div>
 
           <button
             onClick={() => signInGoogle().catch(console.error)}
-            className="w-full py-3 px-5 rounded-2xl bg-white border border-gray-200 shadow-sm font-medium text-gray-800 active:scale-[0.98] transition flex items-center justify-center gap-2.5"
+            className="w-full py-3 px-5 rounded-2xl bg-[var(--bg-panel)] ring-1 ring-[var(--ring-soft)] shadow-sm font-medium text-[var(--text-primary)] active:scale-[0.98] transition flex items-center justify-center gap-2.5"
           >
             <svg width="18" height="18" viewBox="0 0 18 18">
               <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.71v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.61z" />
@@ -64,8 +72,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
             </svg>
             Googleでサインイン
           </button>
-          <p className="mt-6 text-[10px] text-gray-400">
-            あなた専用のロードマップが端末をまたいで同期されます
+          <p className="mt-6 text-[10px] text-[var(--text-muted)]">
+            あなた専用の冒険地図が端末をまたいで同期されます
           </p>
         </div>
       </div>

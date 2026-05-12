@@ -129,34 +129,34 @@ function FieldNode({ data }: NodeProps<CustomData>) {
         {...longPress}
         className={`relative w-[150px] rounded-2xl ring-2 px-3 py-2.5 shadow-md text-left ${
           isDone
-            ? "ring-emerald-400 bg-gradient-to-br from-emerald-50 to-emerald-100"
+            ? "ring-[var(--accent-emerald)] bg-[var(--accent-emerald)]/15"
             : isProg
-            ? "ring-amber-400 bg-gradient-to-br from-amber-50 to-orange-100"
+            ? "ring-[var(--accent-gold)] bg-[var(--accent-gold)]/12"
             : locked
-            ? "ring-slate-200 bg-slate-50"
-            : data.groupColor
+            ? "ring-[var(--ring-soft)] bg-[var(--bg-panel-soft)]"
+            : "ring-[var(--accent-blue)]/60 bg-[var(--bg-panel)]"
         }`}
       >
         {data.groupTitle && (
-          <div className="text-[9px] text-gray-400 truncate mb-1">
+          <div className="text-[9px] text-[var(--text-muted)] truncate mb-1">
             {data.groupTitle}
           </div>
         )}
         <div
           className={`text-xs font-semibold leading-tight ${
-            locked ? "text-slate-400" : "text-gray-900"
+            locked ? "text-[var(--text-locked)]" : "text-[var(--text-primary)]"
           }`}
         >
           {locked && <span className="mr-1">🔒</span>}
-          {isDone && <span className="mr-1 text-emerald-500">✓</span>}
-          {isProg && <span className="mr-1 text-amber-500">◐</span>}
+          {isDone && <span className="mr-1 text-[var(--accent-emerald)]">✓</span>}
+          {isProg && <span className="mr-1 text-[var(--accent-gold)]">◐</span>}
           {n.title}
         </div>
         {(isProg || isDone) && (
-          <div className="mt-1.5 h-1 w-full rounded-full bg-white/70 overflow-hidden">
+          <div className="mt-1.5 h-1 w-full rounded-full bg-[var(--bg-base)]/60 overflow-hidden">
             <div
               className={`h-full ${
-                isDone ? "bg-emerald-400" : "bg-amber-400"
+                isDone ? "bg-[var(--accent-emerald)]" : "bg-[var(--accent-gold)]"
               }`}
               style={{ width: `${isDone ? 100 : cp.pct}%` }}
             />
@@ -240,7 +240,7 @@ export default function UnifiedField({
 
   if (nodes.length === 0) {
     return (
-      <div className="px-6 pt-12 text-center text-sm text-gray-400">
+      <div className="px-6 pt-12 text-center text-sm text-[var(--text-muted)]">
         ノードがまだありません
       </div>
     );
@@ -248,7 +248,7 @@ export default function UnifiedField({
 
   return (
     <div
-      className="mx-4 rounded-2xl bg-white ring-1 ring-gray-200 shadow-sm overflow-hidden"
+      className="mx-4 rounded-2xl bg-[var(--bg-panel)] ring-1 ring-[var(--ring-soft)] shadow-sm overflow-hidden"
       style={{ height: "calc(100vh - 220px)", minHeight: 400 }}
     >
       <ReactFlowProvider>
@@ -267,7 +267,7 @@ export default function UnifiedField({
           zoomOnPinch
           zoomOnScroll
         >
-          <Background gap={20} color="#e5e7eb" />
+          <Background gap={20} color="#2c3148" />
           <Controls showInteractive={false} className="!shadow-md" />
         </ReactFlow>
       </ReactFlowProvider>

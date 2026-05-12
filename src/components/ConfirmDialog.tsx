@@ -37,24 +37,24 @@ export default function ConfirmDialog({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.94 }}
           >
-            <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-white shadow-2xl overflow-hidden">
+            <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-[var(--bg-panel)] ring-1 ring-[var(--ring-soft)] shadow-2xl overflow-hidden">
               <div className="p-6 text-center">
-                <div className="text-base font-bold text-gray-900">{title}</div>
+                <div className="font-quest text-base font-bold text-[var(--accent-gold)]">{title}</div>
                 {message && (
-                  <div className="mt-2 text-sm text-gray-600">{message}</div>
+                  <div className="mt-2 text-sm text-[var(--text-secondary)]">{message}</div>
                 )}
               </div>
-              <div className="grid grid-cols-2 border-t border-gray-100">
+              <div className="grid grid-cols-2 border-t border-[var(--ring-soft)]">
                 <button
                   onClick={onCancel}
-                  className="py-4 text-sm font-semibold text-gray-700 active:bg-gray-50 border-r border-gray-100"
+                  className="py-4 text-sm font-semibold text-[var(--text-secondary)] active:bg-[var(--bg-elev)] border-r border-[var(--ring-soft)]"
                 >
                   {cancelLabel}
                 </button>
                 <button
                   onClick={onConfirm}
                   className={`py-4 text-sm font-bold active:bg-opacity-80 ${
-                    destructive ? "text-red-600 active:bg-red-50" : "text-sky-600 active:bg-sky-50"
+                    destructive ? "text-red-400 active:bg-red-950/30" : "text-sky-400 active:bg-sky-950/30"
                   }`}
                 >
                   {confirmLabel}

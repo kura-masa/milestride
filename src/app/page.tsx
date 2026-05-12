@@ -10,6 +10,7 @@ import {
   isLocked,
   progress,
   nodeProgress,
+  levelInfo,
 } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { useLongPress } from "@/lib/useLongPress";
@@ -67,7 +68,7 @@ function App() {
     }));
     const all: { id: string; title: string; nodes: Node[] }[] = [];
     if (ungrouped.length > 0 || groupTabs.length === 0) {
-      all.push({ id: UNGROUPED, title: "未分類", nodes: ungrouped });
+      all.push({ id: UNGROUPED, title: "未開拓エリア", nodes: ungrouped });
     }
     all.push(...groupTabs);
     return all;
@@ -129,7 +130,7 @@ function App() {
   if (!ready || !ops) {
     return (
       <div className="min-h-screen flex-1 flex items-center justify-center">
-        <div className="text-sm text-gray-400">読み込み中…</div>
+        <div className="text-sm text-[var(--text-muted)]">読み込み中…</div>
       </div>
     );
   }
@@ -170,14 +171,15 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen flex-1 bg-gradient-to-b from-slate-50 via-sky-50 to-white pb-32">
+    <div className="min-h-screen flex-1 bg-[var(--bg-base)] pb-32">
       <Header
         userName={user?.displayName ?? ""}
         userPhoto={user?.photoURL ?? ""}
+        nodes={nodes}
         onSignOut={() => signOutUser().catch(console.error)}
       />
 
-      <div className="sticky top-[52px] z-20 bg-gradient-to-b from-slate-50/95 to-slate-50/70 backdrop-blur px-4 pt-2 pb-3">
+      <div className="sticky top-[52px] z-20 bg-gradient-to-b from-[var(--bg-base)]/95 to-[var(--bg-base)]/70 backdrop-blur px-4 pt-2 pb-3">
         <div className="max-w-md mx-auto flex items-center gap-2">
           <ModeToggle mode={mode} setMode={setMode} />
         </div>
@@ -312,9 +314,9 @@ function App() {
 
       <RenameDialog
         open={!!renameTarget}
-        title="グループ名を編集"
+        title="エリア名を編集"
         initialValue={renameTarget?.current ?? ""}
-        placeholder="グループ名"
+        placeholder="エリア名"
         onCancel={() => setRenameTarget(null)}
         onConfirm={async (next) => {
           if (!renameTarget) return;
@@ -337,7 +339,7 @@ function App() {
         open={!!groupMenu}
         title={groupMenu?.title ?? ""}
         editLabel="✎ 名前変更"
-        deleteLabel="🗑 グループ削除"
+        deleteLabel="🗑 エリア削除"
         onClose={() => setGroupMenu(null)}
         onEdit={() => {
           if (!groupMenu) return;
@@ -360,7 +362,7 @@ function App() {
         open={!!confirmDelGroup}
         title={
           (confirmDelGroup?.nodeCount ?? 0) > 0
-            ? "グループ内の要素が全て消えますがよろしいですか？"
+            ? "エリア内のクエストが全て消えますがよろしいですか？"
             : "本当に削除して良いですか？"
         }
         message={confirmDelGroup?.title}
@@ -385,27 +387,48 @@ function App() {
 function Header({
   userName,
   userPhoto,
+  nodes,
   onSignOut,
 }: {
   userName: string;
   userPhoto: string;
+  nodes: Node[];
   onSignOut: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const lv = useMemo(() => levelInfo(nodes), [nodes]);
   return (
-    <header className="sticky top-0 z-30 bg-white/85 backdrop-blur border-b border-gray-100">
-      <div className="px-4 pt-3 pb-2">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-bold text-gray-900">Milestride</div>
+    <header className="sticky top-0 z-30 bg-[var(--bg-panel)]/90 backdrop-blur border-b border-[var(--ring-soft)]">
+      <div className="px-4 pt-2 pb-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="font-quest text-[15px] font-bold text-[var(--accent-gold)] tracking-wider">
+            MILESTRIDE
+          </div>
+          <div className="flex-1 flex items-center gap-2 min-w-0">
+            <span className="font-quest text-[11px] font-bold text-[var(--accent-blue)] tabular-nums">
+              Lv {lv.lv}
+            </span>
+            <div className="flex-1 h-2 rounded-full bg-[var(--bg-elev)] ring-1 ring-[var(--ring-soft)] overflow-hidden">
+              <motion.div
+                className="h-full bg-gradient-to-r from-[var(--accent-blue)] to-[var(--accent-purple)]"
+                initial={{ width: 0 }}
+                animate={{ width: `${lv.pct}%` }}
+                transition={{ type: "spring", damping: 22, stiffness: 120 }}
+              />
+            </div>
+            <span className="text-[10px] text-[var(--text-secondary)] tabular-nums font-mono">
+              {lv.cur}/{lv.need}
+            </span>
+          </div>
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-gray-200 active:scale-95 transition"
+            className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-[var(--ring-soft)] active:scale-95 transition"
           >
             {userPhoto ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={userPhoto} alt={userName} className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-sky-400 to-emerald-400 text-white text-xs font-bold flex items-center justify-center">
+              <div className="w-full h-full bg-gradient-to-br from-[var(--accent-blue)] to-[var(--accent-purple)] text-white text-xs font-bold flex items-center justify-center">
                 {userName.charAt(0).toUpperCase() || "?"}
               </div>
             )}
@@ -413,8 +436,8 @@ function Header({
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-3 top-12 z-50 rounded-xl bg-white shadow-xl ring-1 ring-gray-200 overflow-hidden">
-                <div className="px-4 py-3 text-xs text-gray-600 border-b border-gray-100">
+              <div className="absolute right-3 top-12 z-50 rounded-xl bg-[var(--bg-elev)] shadow-xl ring-1 ring-[var(--ring-soft)] overflow-hidden">
+                <div className="px-4 py-3 text-xs text-[var(--text-secondary)] border-b border-[var(--ring-soft)]">
                   {userName}
                 </div>
                 <button
@@ -422,7 +445,7 @@ function Header({
                     setMenuOpen(false);
                     onSignOut();
                   }}
-                  className="w-full px-4 py-3 text-left text-sm text-gray-800 active:bg-gray-50"
+                  className="w-full px-4 py-3 text-left text-sm text-[var(--text-primary)] active:bg-[var(--ring-soft)]"
                 >
                   サインアウト
                 </button>
@@ -437,7 +460,7 @@ function Header({
 
 function ModeToggle({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
   return (
-    <div className="relative inline-flex bg-white/80 ring-1 ring-gray-200 rounded-full p-1 shadow-sm">
+    <div className="relative inline-flex bg-[var(--bg-panel)]/80 ring-1 ring-[var(--ring-soft)] rounded-full p-1 shadow-sm">
       <motion.div
         className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-gradient-to-r from-emerald-400 to-sky-400"
         animate={{ left: mode === "focus" ? 4 : "calc(50% + 0px)" }}
@@ -448,7 +471,7 @@ function ModeToggle({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void 
           key={m}
           onClick={() => setMode(m)}
           className={`relative z-10 px-5 py-1.5 text-xs font-semibold rounded-full transition-colors ${
-            mode === m ? "text-white" : "text-gray-600"
+            mode === m ? "text-white" : "text-[var(--text-secondary)]"
           }`}
         >
           {m === "focus" ? "詳細" : "全体"}
@@ -466,16 +489,16 @@ function OverviewSubToggle({
   setLayout: (l: OverviewLayout) => void;
 }) {
   return (
-    <div className="relative inline-flex bg-white ring-1 ring-gray-200 rounded-full p-0.5 shadow-sm text-[13px]">
+    <div className="relative inline-flex bg-[var(--bg-panel)] ring-1 ring-[var(--ring-soft)] rounded-full p-0.5 shadow-sm text-[13px]">
       {(["grouped", "unified"] as const).map((l) => (
         <button
           key={l}
           onClick={() => setLayout(l)}
           className={`px-3 py-1 rounded-full font-semibold transition ${
-            layout === l ? "bg-slate-900 text-white" : "text-gray-600"
+            layout === l ? "bg-[var(--accent-blue)] text-white" : "text-[var(--text-secondary)]"
           }`}
         >
-          {l === "grouped" ? "グループ別" : "統合フィールド"}
+          {l === "grouped" ? "エリア別" : "冒険地図"}
         </button>
       ))}
     </div>
@@ -517,8 +540,8 @@ function ChainTabs({
         })}
         <button
           onClick={onAddGroup}
-          aria-label="グループを追加"
-          className="flex-none w-8 h-8 rounded-full bg-white text-sky-500 ring-1 ring-sky-200 active:bg-sky-50 flex items-center justify-center font-bold text-base"
+          aria-label="エリアを追加"
+          className="flex-none w-8 h-8 rounded-full bg-[var(--bg-panel)] text-sky-500 ring-1 ring-sky-200 active:bg-sky-50 flex items-center justify-center font-bold text-base"
         >
           ＋
         </button>
@@ -552,14 +575,14 @@ function ChainTab({
       {...props}
       className={`flex-none px-3 py-1.5 rounded-full text-xs font-medium ring-1 transition ${
         active
-          ? "bg-slate-900 text-white ring-slate-900"
-          : "bg-white text-gray-700 ring-gray-200 active:bg-gray-50"
+          ? "bg-[var(--accent-blue)] text-white ring-[var(--accent-blue)]"
+          : "bg-[var(--bg-panel)] text-[var(--text-secondary)] ring-[var(--ring-soft)] active:bg-[var(--bg-panel-soft)]"
       }`}
     >
       {title}
       <span
         className={`ml-2 tabular-nums ${
-          active ? "text-emerald-300" : "text-gray-400"
+          active ? "text-emerald-300" : "text-[var(--text-muted)]"
         }`}
       >
         {pct}%
@@ -626,15 +649,15 @@ function FocusView({
       <main className="px-6 pt-12">
         <div className="max-w-md mx-auto text-center">
           <div className="text-5xl mb-4">🗺️</div>
-          <div className="font-bold text-gray-900 mb-1">ノードがまだありません</div>
-          <p className="text-sm text-gray-500 mb-6">
+          <div className="font-bold text-[var(--text-primary)] mb-1">クエストがまだありません</div>
+          <p className="text-sm text-[var(--text-secondary)] mb-6">
             最初の一歩を追加して、ロードマップを始めましょう
           </p>
           <button
             onClick={onAdd}
             className="px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-400 to-sky-400 text-white font-bold text-sm shadow-lg active:scale-95 transition"
           >
-            ＋ 最初のノードを追加
+            ⚔ 最初のクエストを発行
           </button>
         </div>
       </main>
@@ -896,7 +919,7 @@ function PathNode({
           <div className="text-center mt-2 px-1 w-full">
             <div
               className={`text-xs font-semibold leading-tight ${
-                locked ? "text-slate-400" : "text-gray-800"
+                locked ? "text-slate-400" : "text-[var(--text-primary)]"
               }`}
             >
               {n.title}
@@ -922,7 +945,7 @@ function OverviewView({
   if (tabs.length === 0 || allNodes.length === 0) {
     return (
       <main className="px-6 pt-12 text-center">
-        <div className="text-sm text-gray-400">ノードがまだありません</div>
+        <div className="text-sm text-[var(--text-muted)]">クエストがまだありません</div>
       </main>
     );
   }
@@ -942,18 +965,18 @@ function OverviewView({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") onPickGroup(t.id);
                 }}
-                className="rounded-2xl bg-white ring-1 ring-gray-200 p-2.5 shadow-sm cursor-pointer active:scale-[0.98] active:bg-gray-50 transition"
+                className="rounded-2xl bg-[var(--bg-panel)] ring-1 ring-[var(--ring-soft)] p-2.5 shadow-sm cursor-pointer active:scale-[0.98] active:bg-[var(--bg-panel-soft)] transition"
               >
-                <div className="text-[14px] font-bold text-gray-800 leading-tight line-clamp-1">
+                <div className="text-[14px] font-bold text-[var(--text-primary)] leading-tight line-clamp-1">
                   {t.title}
                 </div>
-                <div className="mt-1.5 h-1 w-full rounded-full bg-gray-100 overflow-hidden">
+                <div className="mt-1.5 h-1 w-full rounded-full bg-[var(--bg-elev)] overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-emerald-400 to-sky-400"
                     style={{ width: `${p.pct}%` }}
                   />
                 </div>
-                <div className="text-[13px] text-gray-400 mt-1 tabular-nums">{p.pct}%</div>
+                <div className="text-[13px] text-[var(--text-muted)] mt-1 tabular-nums">{p.pct}%</div>
                 <div className="mt-2 space-y-1.5">
                   {t.nodes.map((n, i) => (
                     <MiniNode
@@ -1009,7 +1032,7 @@ function MiniNode({
             ? "bg-gradient-to-br from-amber-300 to-orange-400 text-white"
             : locked
             ? "bg-slate-200 text-slate-400"
-            : "bg-white ring-1 ring-sky-300 text-sky-500"
+            : "bg-[var(--bg-panel)] ring-1 ring-sky-300 text-sky-500"
         }`}
       >
         {isDone ? "✓" : isProg ? "◐" : locked ? "🔒" : idx + 1}
@@ -1017,13 +1040,13 @@ function MiniNode({
       <div className="flex-1 min-w-0">
         <div
           className={`text-[14px] leading-tight truncate ${
-            locked ? "text-slate-400" : "text-gray-800"
+            locked ? "text-slate-400" : "text-[var(--text-primary)]"
           }`}
         >
           {n.title}
         </div>
         {isProg && (
-          <div className="mt-0.5 h-0.5 w-full rounded-full bg-gray-100 overflow-hidden">
+          <div className="mt-0.5 h-0.5 w-full rounded-full bg-[var(--bg-elev)] overflow-hidden">
             <div
               className="h-full bg-amber-400"
               style={{ width: `${cp.pct}%` }}
@@ -1044,7 +1067,7 @@ function FAB({ onClick }: { onClick: () => void }) {
       animate={{ scale: 1, opacity: 1 }}
       transition={{ delay: 0.2, type: "spring", damping: 16 }}
       className="fixed bottom-6 right-5 z-30 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-sky-500 text-white text-2xl font-bold shadow-xl shadow-sky-300/50 flex items-center justify-center"
-      aria-label="新規ノード"
+      aria-label="クエスト発行"
     >
       ＋
     </motion.button>

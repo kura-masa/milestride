@@ -327,6 +327,21 @@ export function nodeProgress(n: Node): number {
   return n.status === "in_progress" ? 0.5 : 0;
 }
 
+/** Compute the adventurer's level + EXP from completed quests.
+ *  Each completed node = 10 EXP. Cumulative thresholds form a quadratic
+ *  curve: Lv 2 needs 30 EXP, Lv 3 needs 90, Lv 4 needs 180, Lv 5 needs 300.
+ *  Going from Lv L to L+1 always costs 30 * L EXP. */
+export function levelInfo(ns: Node[]) {
+  const done = ns.filter((n) => n.status === "done").length;
+  const exp = done * 10;
+  let lv = 1;
+  while (15 * (lv + 1) * lv <= exp) lv++;
+  const cur = exp - 15 * lv * (lv - 1);
+  const need = 30 * lv;
+  const pct = need === 0 ? 0 : Math.min(100, Math.round((cur / need) * 100));
+  return { lv, exp, cur, need, pct, doneCount: done };
+}
+
 export function progress(ns: Node[]) {
   const total = ns.length;
   const done = ns.filter((n) => n.status === "done").length;

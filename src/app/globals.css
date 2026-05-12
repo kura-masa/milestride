@@ -1,13 +1,36 @@
 @import "tailwindcss";
 
+/* ── Game-like dark theme ───────────────────────────────────── */
+:root {
+  --bg-base: #0d0e14;        /* deep indigo-black */
+  --bg-panel: #1a1d29;
+  --bg-panel-soft: #14171f;
+  --bg-elev: #232739;
+  --ring-soft: #2c3148;
+  --ring-strong: #3a3e52;
+
+  --accent-gold: #ffd166;     /* level up / important */
+  --accent-blue: #6ad4ff;     /* in-progress / quest */
+  --accent-purple: #b794ff;   /* magic / group */
+  --accent-crystal: #7df9ff;
+  --accent-stamp: #ff8a5b;    /* achievement stamp */
+  --accent-emerald: #34d399;
+
+  --text-primary: #e6e8ee;
+  --text-secondary: #8b91a8;
+  --text-muted: #5d6379;
+  --text-locked: #3a3e52;
+}
+
 html {
   font-size: 18px;
 }
 
 html, body {
-  background: #ffffff;
-  color: #171717;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -15,14 +38,30 @@ html, body {
   -webkit-touch-callout: none;
 }
 
-/* Tiptap memo editor */
+/* Decorative "quest" font for headings, level labels, area names, etc. */
+.font-quest {
+  font-family: var(--font-quest), var(--font-geist-sans), system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+
+/* Faint subtle grid texture for a "map / dungeon" feel.
+   Cheap CSS-only, no asset cost. */
+body {
+  background-image:
+    radial-gradient(rgba(122, 145, 200, 0.06) 1px, transparent 1px),
+    radial-gradient(rgba(122, 145, 200, 0.03) 1px, transparent 1px);
+  background-size: 22px 22px, 11px 11px;
+  background-position: 0 0, 11px 11px;
+}
+
+/* ── Tiptap memo editor ─────────────────────────────────────── */
 .tiptap p {
   margin: 0;
   padding: 2px 0;
 }
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: #9ca3af;
+  color: var(--text-muted);
   pointer-events: none;
   height: 0;
   float: left;
@@ -37,8 +76,8 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.4);
   border-radius: 8px;
   padding: 1px 6px;
   margin: 0 2px;
@@ -47,8 +86,8 @@ html, body {
   line-height: 1.2;
 }
 .inline-check.is-checked {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
+  background: rgba(52, 211, 153, 0.08);
+  border-color: rgba(52, 211, 153, 0.3);
   opacity: 0.75;
 }
 .inline-check-box {
@@ -58,9 +97,9 @@ html, body {
   justify-content: center;
   width: 16px;
   height: 16px;
-  border: 2px solid #cbd5e1;
+  border: 2px solid #4a5168;
   border-radius: 9999px;
-  background: #fff;
+  background: #0f111a;
   color: transparent;
   font-size: 10px;
   font-weight: 700;
@@ -69,24 +108,21 @@ html, body {
   user-select: none;
 }
 .inline-check.is-checked .inline-check-box {
-  background: #10b981;
-  border-color: #10b981;
-  color: #fff;
+  background: #34d399;
+  border-color: #34d399;
+  color: #0d0e14;
 }
 .inline-check-label {
-  color: #065f46;
+  color: #a7f3d0;
   font-weight: 500;
   font-size: 0.95em;
   white-space: nowrap;
   min-width: 1ch;
 }
 .inline-check.is-checked .inline-check-label {
-  color: #6b7280;
+  color: var(--text-muted);
   text-decoration: line-through;
-  /* keep font-weight identical to unchecked to avoid baseline shift */
 }
-
-/* Empty chip: show only the checkbox (no padding, border, or label space) */
 .inline-check.is-empty {
   padding: 0;
   gap: 0;
@@ -95,4 +131,26 @@ html, body {
 }
 .inline-check.is-empty .inline-check-label {
   min-width: 0;
+}
+
+/* ── Achievement stamp (placeholder; refined in Phase 2) ─────── */
+.quest-stamp {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  background: var(--accent-stamp);
+  color: #1a0e08;
+  font-family: var(--font-quest), system-ui;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffd5b8;
+  box-shadow: 0 0 8px rgba(255, 138, 91, 0.5);
+  transform: rotate(-12deg);
 }

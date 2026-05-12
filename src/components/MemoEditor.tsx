@@ -406,7 +406,7 @@ export const MemoEditor = forwardRef<
     editorProps: {
       attributes: {
         class:
-          "tiptap min-h-[88px] w-full px-3 py-2.5 rounded-xl bg-gray-50 ring-1 ring-gray-200 focus:ring-sky-400 outline-none text-sm leading-relaxed",
+          "tiptap min-h-[88px] w-full px-3 py-2.5 rounded-xl bg-[var(--bg-panel-soft)] ring-1 ring-[var(--ring-soft)] focus:ring-sky-400 outline-none text-sm leading-relaxed text-[var(--text-primary)]",
         "data-placeholder": placeholder ?? "メモ・チェックリスト",
       },
     },
