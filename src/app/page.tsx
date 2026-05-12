@@ -53,7 +53,11 @@ function App() {
   } | null>(null);
   const [confirmDel, setConfirmDel] = useState<Node | null>(null);
   const [renameTarget, setRenameTarget] = useState<
-    { id: string; current: string } | null
+    {
+      id: string;
+      current: string;
+      currentDifficulty?: Difficulty;
+    } | null
   >(null);
   const [groupMenu, setGroupMenu] = useState<
     { id: string; title: string } | null
@@ -146,9 +150,10 @@ function App() {
   }
 
   const handleSave = async (draft: NodeDraft) => {
-    // Derive quest status from the inline checklist in the memo.
-    // All checks done → "done", some → "in_progress", none → "todo".
-    const status = deriveStatusFromMemo(draft.memo);
+    // If the memo has inline checklist items, derive status from them.
+    // Otherwise fall back to whatever the user set manually via the
+    // "クエスト達成" toggle in the editor.
+    const status = deriveStatusFromMemo(draft.memo, draft.status);
     const draftWithStatus = { ...draft, status };
     if (editor?.node) {
       await ops.updateNode(editor.node.id, draftWithStatus);
@@ -329,11 +334,12 @@ function App() {
 
       <RenameDialog
         open={!!renameTarget}
-        title="エリア名を編集"
+        title="エリア編集"
         initialValue={renameTarget?.current ?? ""}
+        initialDifficulty={renameTarget?.currentDifficulty}
         placeholder="エリア名"
         onCancel={() => setRenameTarget(null)}
-        onConfirm={async (next) => {
+        onConfirm={async (next, difficulty) => {
           if (!renameTarget) return;
           const id = renameTarget.id;
           if (id === UNGROUPED) {
@@ -343,8 +349,17 @@ function App() {
               ungroupedNodes.map((n) => ops.updateNode(n.id, { groupId: newId }))
             );
             setActiveTab(newId);
-          } else if (next !== renameTarget.current) {
-            await ops.updateGroup(id, { title: next });
+          } else {
+            const patch: { title?: string; difficulty?: Difficulty } = {};
+            if (next !== renameTarget.current) patch.title = next;
+            if (
+              difficulty !== undefined &&
+              difficulty !== renameTarget.currentDifficulty
+            )
+              patch.difficulty = difficulty;
+            if (patch.title !== undefined || patch.difficulty !== undefined) {
+              await ops.updateGroup(id, patch);
+            }
           }
           setRenameTarget(null);
         }}
@@ -353,12 +368,17 @@ function App() {
       <ActionMenu
         open={!!groupMenu}
         title={groupMenu?.title ?? ""}
-        editLabel="✎ 名前変更"
+        editLabel="✎ 名前 / 難易度 変更"
         deleteLabel="🗑 エリア削除"
         onClose={() => setGroupMenu(null)}
         onEdit={() => {
           if (!groupMenu) return;
-          setRenameTarget({ id: groupMenu.id, current: groupMenu.title });
+          const g = groups.find((x) => x.id === groupMenu.id);
+          setRenameTarget({
+            id: groupMenu.id,
+            current: groupMenu.title,
+            currentDifficulty: (g?.difficulty ?? 1) as Difficulty,
+          });
           setGroupMenu(null);
         }}
         onDelete={() => {

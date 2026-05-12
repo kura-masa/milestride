@@ -6,6 +6,7 @@ import {
   Status,
   Difficulty,
   difficultyMeta,
+  parseMemoChecklist,
 } from "@/lib/store";
 import { MemoEditor, MemoEditorHandle } from "./MemoEditor";
 
@@ -217,6 +218,42 @@ export default function NodeEditor({
                   </div>
                 )}
               </Field>
+
+              {(() => {
+                const hasChecks = parseMemoChecklist(draft.memo).length > 0;
+                const isDone = draft.status === "done";
+                return (
+                  <Field
+                    label="クエスト状態"
+                    hint={
+                      hasChecks ? "メモのチェックで自動判定" : "手動で達成にできます"
+                    }
+                  >
+                    <button
+                      type="button"
+                      disabled={hasChecks}
+                      onClick={() =>
+                        setDraft((d) => ({
+                          ...d,
+                          status: d.status === "done" ? "todo" : "done",
+                        }))
+                      }
+                      className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl ring-1 text-sm font-bold transition ${
+                        isDone
+                          ? "bg-[var(--accent-stamp)]/15 ring-[var(--accent-stamp)] text-[var(--accent-stamp)]"
+                          : "bg-[var(--bg-panel-soft)] ring-[var(--ring-soft)] text-[var(--text-secondary)] active:bg-[var(--bg-elev)]"
+                      } ${hasChecks ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      <span className="text-base">
+                        {isDone ? "★" : "☆"}
+                      </span>
+                      <span className="font-quest tracking-wider">
+                        {isDone ? "達成済み" : "未達成"}
+                      </span>
+                    </button>
+                  </Field>
+                );
+              })()}
 
               <Field
                 label="メモ"
