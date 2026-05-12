@@ -13,6 +13,7 @@ import {
   progress,
   nodeProgress,
   levelInfo,
+  deriveStatusFromMemo,
 } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { useLongPress } from "@/lib/useLongPress";
@@ -145,8 +146,12 @@ function App() {
   }
 
   const handleSave = async (draft: NodeDraft) => {
+    // Derive quest status from the inline checklist in the memo.
+    // All checks done → "done", some → "in_progress", none → "todo".
+    const status = deriveStatusFromMemo(draft.memo);
+    const draftWithStatus = { ...draft, status };
     if (editor?.node) {
-      await ops.updateNode(editor.node.id, draft);
+      await ops.updateNode(editor.node.id, draftWithStatus);
     } else {
       // For new nodes, prefer draft.groupId (set by the editor),
       // else fall back to preset (e.g. current tab in non-unified views).
@@ -157,7 +162,7 @@ function App() {
           ? currentTab.id
           : null;
       const newId = await ops.addNode({
-        ...draft,
+        ...draftWithStatus,
         groupId: draft.groupId ?? fallback,
         order: Date.now(),
       });
