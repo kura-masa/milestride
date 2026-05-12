@@ -1,7 +1,12 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Node, Status } from "@/lib/store";
+import {
+  Node,
+  Status,
+  Difficulty,
+  difficultyMeta,
+} from "@/lib/store";
 import { MemoEditor, MemoEditorHandle } from "./MemoEditor";
 
 export type NodeDraft = {
@@ -31,18 +36,20 @@ export default function NodeEditor({
   onSave: (draft: NodeDraft) => Promise<void> | void;
   onCancel: () => void;
   onDelete?: () => void;
-  onAddGroup: (title: string) => Promise<string>;
+  onAddGroup: (title: string, difficulty: Difficulty) => Promise<string>;
 }) {
   const [draft, setDraft] = useState<NodeDraft>(() => normalize(initial));
   const [saving, setSaving] = useState(false);
   const [groupNameAtTop, setGroupNameAtTop] = useState("");
   const [groupNameError, setGroupNameError] = useState<string | null>(null);
+  const [difficulty, setDifficulty] = useState<Difficulty>(1);
 
   useEffect(() => {
     if (open) {
       setDraft(normalize(initial));
       setGroupNameAtTop("");
       setGroupNameError(null);
+      setDifficulty(1);
     }
   }, [open, initial]);
 
@@ -71,7 +78,7 @@ export default function NodeEditor({
     try {
       let groupId = draft.groupId;
       if (requireNewGroup) {
-        groupId = await onAddGroup(groupNameAtTop.trim());
+        groupId = await onAddGroup(groupNameAtTop.trim(), difficulty);
       }
       const cleaned: NodeDraft = { ...draft, groupId };
       await onSave(cleaned);
@@ -146,6 +153,38 @@ export default function NodeEditor({
                       <span>{groupNameError}</span>
                     </div>
                   )}
+                </Field>
+              )}
+
+              {requireNewGroup && (
+                <Field label="難易度" hint="EXP 倍率と紋章を決めます">
+                  <div className="grid grid-cols-5 gap-2">
+                    {([1, 2, 3, 4, 5] as Difficulty[]).map((d) => {
+                      const m = difficultyMeta[d];
+                      const active = difficulty === d;
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setDifficulty(d)}
+                          className={`flex flex-col items-center gap-0.5 py-2 rounded-xl ring-1 transition ${
+                            active
+                              ? "bg-[var(--bg-elev)] ring-[var(--accent-gold)]"
+                              : "bg-[var(--bg-panel-soft)] ring-[var(--ring-soft)] active:bg-[var(--bg-elev)]"
+                          }`}
+                          style={active ? { color: m.color } : { color: "var(--text-secondary)" }}
+                        >
+                          <span className="text-xl leading-none">{m.emoji}</span>
+                          <span className="font-quest text-[10px] tracking-wider">
+                            {m.name}
+                          </span>
+                          <span className="text-[9px] text-[var(--text-muted)]">
+                            ×{m.expMul}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </Field>
               )}
 

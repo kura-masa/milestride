@@ -6,6 +6,8 @@ import {
   useMutations,
   Node,
   Group,
+  Difficulty,
+  difficultyMeta,
   checklistProgress,
   isLocked,
   progress,
@@ -59,14 +61,21 @@ function App() {
     { id: string; title: string; nodeCount: number } | null
   >(null);
 
-  const tabs = useMemo<{ id: string; title: string; nodes: Node[] }[]>(() => {
+  type Tab = {
+    id: string;
+    title: string;
+    nodes: Node[];
+    difficulty?: Difficulty;
+  };
+  const tabs = useMemo<Tab[]>(() => {
     const ungrouped = nodes.filter((n) => !n.groupId);
-    const groupTabs = groups.map((g) => ({
+    const groupTabs: Tab[] = groups.map((g) => ({
       id: g.id,
       title: g.title,
       nodes: nodes.filter((n) => n.groupId === g.id),
+      difficulty: (g.difficulty ?? 1) as Difficulty,
     }));
-    const all: { id: string; title: string; nodes: Node[] }[] = [];
+    const all: Tab[] = [];
     if (ungrouped.length > 0 || groupTabs.length === 0) {
       all.push({ id: UNGROUPED, title: "未開拓エリア", nodes: ungrouped });
     }
@@ -176,6 +185,7 @@ function App() {
         userName={user?.displayName ?? ""}
         userPhoto={user?.photoURL ?? ""}
         nodes={nodes}
+        groups={groups}
         onSignOut={() => signOutUser().catch(console.error)}
       />
 
@@ -296,8 +306,8 @@ function App() {
               }
             : undefined
         }
-        onAddGroup={async (title) => {
-          const id = await ops.addGroup(title);
+        onAddGroup={async (title, difficulty) => {
+          const id = await ops.addGroup(title, difficulty);
           return id;
         }}
       />
@@ -388,15 +398,17 @@ function Header({
   userName,
   userPhoto,
   nodes,
+  groups,
   onSignOut,
 }: {
   userName: string;
   userPhoto: string;
   nodes: Node[];
+  groups: Group[];
   onSignOut: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const lv = useMemo(() => levelInfo(nodes), [nodes]);
+  const lv = useMemo(() => levelInfo(nodes, groups), [nodes, groups]);
   return (
     <header className="sticky top-0 z-30 bg-[var(--bg-panel)]/90 backdrop-blur border-b border-[var(--ring-soft)]">
       <div className="px-4 pt-2 pb-2">
@@ -513,7 +525,12 @@ function ChainTabs({
   onAddGroup,
   onRenameGroup,
 }: {
-  tabs: { id: string; title: string; nodes: Node[] }[];
+  tabs: {
+    id: string;
+    title: string;
+    nodes: Node[];
+    difficulty?: Difficulty;
+  }[];
   activeId: string;
   onChange: (id: string) => void;
   allNodes: Node[];
@@ -532,6 +549,7 @@ function ChainTabs({
               id={t.id}
               title={t.title}
               pct={p.pct}
+              difficulty={t.difficulty}
               active={active}
               onTap={() => onChange(t.id)}
               onLongPress={() => onRenameGroup(t.id, t.title)}
@@ -554,6 +572,7 @@ function ChainTabs({
 function ChainTab({
   title,
   pct,
+  difficulty,
   active,
   onTap,
   onLongPress,
@@ -561,6 +580,7 @@ function ChainTab({
   id: string;
   title: string;
   pct: number;
+  difficulty?: Difficulty;
   active: boolean;
   onTap: () => void;
   onLongPress?: () => void;
@@ -570,18 +590,27 @@ function ChainTab({
     onLongPress: onLongPress ?? (() => {}),
   });
   const props = onLongPress ? lp : { onClick: onTap };
+  const m = difficulty ? difficultyMeta[difficulty] : null;
   return (
     <button
       {...props}
-      className={`flex-none px-3 py-1.5 rounded-full text-xs font-medium ring-1 transition ${
+      className={`flex-none px-3 py-1.5 rounded-full text-xs font-medium ring-1 transition flex items-center gap-1.5 ${
         active
           ? "bg-[var(--accent-blue)] text-white ring-[var(--accent-blue)]"
           : "bg-[var(--bg-panel)] text-[var(--text-secondary)] ring-[var(--ring-soft)] active:bg-[var(--bg-panel-soft)]"
       }`}
     >
-      {title}
+      {m && (
+        <span
+          className="text-sm leading-none"
+          style={{ color: active ? "#fff" : m.color }}
+        >
+          {m.emoji}
+        </span>
+      )}
+      <span>{title}</span>
       <span
-        className={`ml-2 tabular-nums ${
+        className={`tabular-nums ${
           active ? "text-emerald-300" : "text-[var(--text-muted)]"
         }`}
       >
@@ -798,14 +827,14 @@ function PathNode({
   const locked = isLocked(n, allNodes);
   const pct = Math.round(nodeProgress(n) * 100);
 
-  // ring color by status
+  // ring color by status (dark theme)
   const ringClass = isDone
-    ? "ring-emerald-200"
+    ? "ring-emerald-500/60"
     : isProg
-    ? "ring-amber-200"
+    ? "ring-amber-400/60"
     : locked
-    ? "ring-slate-100"
-    : "ring-sky-200";
+    ? "ring-slate-700"
+    : "ring-sky-500/50";
 
   // water gradient (from→to, bottom→top)
   const waterFrom = isDone
@@ -823,8 +852,8 @@ function PathNode({
     ? "#e2e8f0"
     : "#bae6fd";
 
-  // empty tank background
-  const tankBg = locked ? "#f1f5f9" : "#f8fafc";
+  // empty tank background (dark-theme friendly)
+  const tankBg = locked ? "#1a1d29" : "#14171f";
 
   const longPress = useLongPress({ onTap, onLongPress });
 
@@ -852,16 +881,19 @@ function PathNode({
         <div className="flex flex-col items-center">
           <div className="relative">
             {isDone && (
-              <motion.div
-                className="absolute inset-0 rounded-full"
-                animate={{
-                  boxShadow: [
-                    "0 0 0 0 rgba(52,211,153,0.45)",
-                    "0 0 0 14px rgba(52,211,153,0)",
-                  ],
-                }}
-                transition={{ duration: 2.2, repeat: Infinity }}
-              />
+              <>
+                <motion.div
+                  className="absolute inset-0 rounded-full"
+                  animate={{
+                    boxShadow: [
+                      "0 0 0 0 rgba(52,211,153,0.45)",
+                      "0 0 0 14px rgba(52,211,153,0)",
+                    ],
+                  }}
+                  transition={{ duration: 2.2, repeat: Infinity }}
+                />
+                <span className="quest-stamp">達成</span>
+              </>
             )}
             <div
               className={`relative w-20 h-20 rounded-full overflow-hidden ring-4 shadow-lg ${ringClass}`}
@@ -901,7 +933,7 @@ function PathNode({
                   <>
                     <span
                       className={`text-[15px] font-extrabold tabular-nums leading-none drop-shadow-sm ${
-                        isDone || isProg ? "text-white" : "text-sky-900"
+                        isDone || isProg ? "text-white" : "text-sky-300"
                       }`}
                     >
                       {pct}%
@@ -937,7 +969,12 @@ function OverviewView({
   onPick,
   onPickGroup,
 }: {
-  tabs: { id: string; title: string; nodes: Node[] }[];
+  tabs: {
+    id: string;
+    title: string;
+    nodes: Node[];
+    difficulty?: Difficulty;
+  }[];
   allNodes: Node[];
   onPick: (n: Node, tabId: string) => void;
   onPickGroup: (tabId: string) => void;
@@ -956,6 +993,7 @@ function OverviewView({
         <div className="grid grid-cols-2 gap-3">
           {tabs.map((t) => {
             const p = progress(t.nodes);
+            const m = t.difficulty ? difficultyMeta[t.difficulty] : null;
             return (
               <div
                 key={t.id}
@@ -967,8 +1005,18 @@ function OverviewView({
                 }}
                 className="rounded-2xl bg-[var(--bg-panel)] ring-1 ring-[var(--ring-soft)] p-2.5 shadow-sm cursor-pointer active:scale-[0.98] active:bg-[var(--bg-panel-soft)] transition"
               >
-                <div className="text-[14px] font-bold text-[var(--text-primary)] leading-tight line-clamp-1">
-                  {t.title}
+                <div className="flex items-center gap-1.5">
+                  {m && (
+                    <span
+                      className="text-base leading-none"
+                      style={{ color: m.color }}
+                    >
+                      {m.emoji}
+                    </span>
+                  )}
+                  <div className="text-[14px] font-bold text-[var(--text-primary)] leading-tight line-clamp-1 flex-1 min-w-0">
+                    {t.title}
+                  </div>
                 </div>
                 <div className="mt-1.5 h-1 w-full rounded-full bg-[var(--bg-elev)] overflow-hidden">
                   <div

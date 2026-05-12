@@ -36,13 +36,28 @@ export type Node = {
   updatedAt?: Timestamp;
 };
 
+export type Difficulty = 1 | 2 | 3 | 4 | 5;
+
 export type Group = {
   id: string;
   title: string;
   color?: string;
+  /** 1=見習い 5=伝説. Determines emblem icon and EXP multiplier. */
+  difficulty?: Difficulty;
   order: number;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+};
+
+export const difficultyMeta: Record<
+  Difficulty,
+  { name: string; emoji: string; color: string; expMul: number }
+> = {
+  1: { name: "見習い", emoji: "🛡", color: "#a37854", expMul: 1 },
+  2: { name: "熟練", emoji: "⚔", color: "#c0c0c0", expMul: 1.5 },
+  3: { name: "達人", emoji: "👑", color: "#ffd166", expMul: 2 },
+  4: { name: "英雄", emoji: "✦", color: "#a4a4ff", expMul: 3 },
+  5: { name: "伝説", emoji: "♛", color: "#ff5577", expMul: 5 },
 };
 
 function userPath(uid: string, ...rest: string[]) {
@@ -206,9 +221,14 @@ export function useMutations() {
           updatedAt: serverTimestamp(),
         });
       },
-      addGroup: async (title: string, order = Date.now()) => {
+      addGroup: async (
+        title: string,
+        difficulty: Difficulty = 1,
+        order = Date.now()
+      ) => {
         const ref = await addDoc(groupsCol, {
           title,
+          difficulty,
           order,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -331,9 +351,19 @@ export function nodeProgress(n: Node): number {
  *  Each completed node = 10 EXP. Cumulative thresholds form a quadratic
  *  curve: Lv 2 needs 30 EXP, Lv 3 needs 90, Lv 4 needs 180, Lv 5 needs 300.
  *  Going from Lv L to L+1 always costs 30 * L EXP. */
-export function levelInfo(ns: Node[]) {
-  const done = ns.filter((n) => n.status === "done").length;
-  const exp = done * 10;
+/** Compute the adventurer's level + EXP. Base 10 EXP per done quest,
+ *  multiplied by the quest's area difficulty (1-5x). */
+export function levelInfo(ns: Node[], gs: Group[] = []) {
+  const diffById = new Map<string | null, Difficulty>();
+  for (const g of gs) diffById.set(g.id, (g.difficulty ?? 1) as Difficulty);
+  let exp = 0;
+  let done = 0;
+  for (const n of ns) {
+    if (n.status !== "done") continue;
+    done++;
+    const d: Difficulty = diffById.get(n.groupId) ?? 1;
+    exp += Math.round(10 * difficultyMeta[d].expMul);
+  }
   let lv = 1;
   while (15 * (lv + 1) * lv <= exp) lv++;
   const cur = exp - 15 * lv * (lv - 1);
