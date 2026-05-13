@@ -243,13 +243,14 @@ export default function NodeEditor({
 
               {(() => {
                 const COLLAPSE_THRESHOLD = 5;
+                const COLLAPSED_MAX = 4;
                 const needsCollapse = otherNodes.length > COLLAPSE_THRESHOLD;
                 const visibleNodes = !needsCollapse || parentsExpanded
                   ? otherNodes
                   : (() => {
                       const sel = otherNodes.filter((n) => draft.parents.includes(n.id));
                       const unsel = otherNodes.filter((n) => !draft.parents.includes(n.id));
-                      const extra = Math.max(0, COLLAPSE_THRESHOLD - sel.length);
+                      const extra = Math.max(0, COLLAPSED_MAX - sel.length);
                       return [...sel, ...unsel.slice(0, extra)];
                     })();
                 const hiddenCount = otherNodes.length - visibleNodes.length;
