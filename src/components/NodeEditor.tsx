@@ -22,6 +22,7 @@ export type NodeDraft = {
 export default function NodeEditor({
   open,
   initial,
+  nodeImages,
   allNodes,
   isNew,
   requireNewGroup = false,
@@ -34,6 +35,7 @@ export default function NodeEditor({
 }: {
   open: boolean;
   initial: Partial<NodeDraft> & { id?: string; images?: string[] };
+  nodeImages?: string[];
   allNodes: Node[];
   isNew: boolean;
   requireNewGroup?: boolean;
@@ -50,6 +52,7 @@ export default function NodeEditor({
   const [groupNameError, setGroupNameError] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>(1);
   const [fabBottom, setFabBottom] = useState(12);
+  const [parentsExpanded, setParentsExpanded] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -57,6 +60,7 @@ export default function NodeEditor({
       setGroupNameAtTop("");
       setGroupNameError(null);
       setDifficulty(1);
+      setParentsExpanded(false);
     }
   }, [open, initial]);
 
@@ -237,25 +241,51 @@ export default function NodeEditor({
                 />
               </Field>
 
-              <Field
-                label="前提クエスト"
-              >
-                {otherNodes.length === 0 ? (
-                  <div className="text-xs text-[var(--text-muted)] px-1">他のクエストがまだありません</div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {otherNodes.map((n) => (
-                      <Chip
-                        key={n.id}
-                        active={draft.parents.includes(n.id)}
-                        onClick={() => toggleParent(n.id)}
-                      >
-                        {n.title}
-                      </Chip>
-                    ))}
-                  </div>
-                )}
-              </Field>
+              {(() => {
+                const COLLAPSE_THRESHOLD = 5;
+                const needsCollapse = otherNodes.length > COLLAPSE_THRESHOLD;
+                const visibleNodes = !needsCollapse || parentsExpanded
+                  ? otherNodes
+                  : (() => {
+                      const sel = otherNodes.filter((n) => draft.parents.includes(n.id));
+                      const unsel = otherNodes.filter((n) => !draft.parents.includes(n.id));
+                      const extra = Math.max(0, COLLAPSE_THRESHOLD - sel.length);
+                      return [...sel, ...unsel.slice(0, extra)];
+                    })();
+                const hiddenCount = otherNodes.length - visibleNodes.length;
+                return (
+                  <Field label="前提クエスト">
+                    {otherNodes.length === 0 ? (
+                      <div className="text-xs text-[var(--text-muted)] px-1">他のクエストがまだありません</div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          {visibleNodes.map((n) => (
+                            <Chip
+                              key={n.id}
+                              active={draft.parents.includes(n.id)}
+                              onClick={() => toggleParent(n.id)}
+                            >
+                              {n.title}
+                            </Chip>
+                          ))}
+                        </div>
+                        {needsCollapse && (
+                          <button
+                            type="button"
+                            onClick={() => setParentsExpanded((v) => !v)}
+                            className="text-xs text-[var(--accent-blue)] font-semibold px-1"
+                          >
+                            {parentsExpanded
+                              ? "▲ 折りたたむ"
+                              : `▼ 他${hiddenCount}件を表示`}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </Field>
+                );
+              })()}
 
               {(() => {
                 const hasChecks = parseMemoChecklist(draft.memo).length > 0;
@@ -320,7 +350,7 @@ export default function NodeEditor({
 
               <Field label="画像">
                 <ImageAttachments
-                  images={initial.images ?? []}
+                  images={nodeImages ?? initial.images ?? []}
                   nodeId={initial.id ?? null}
                   onAdd={(file) => onAddImage(initial.id!, file)}
                   onRemove={(url) => onRemoveImage(initial.id!, url)}

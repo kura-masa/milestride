@@ -14,6 +14,7 @@ import {
   nodeProgress,
   levelInfo,
   deriveStatusFromMemo,
+  parseMemoChecklist,
 } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { useLongPress } from "@/lib/useLongPress";
@@ -57,6 +58,13 @@ function App() {
   const editorInitial = useMemo<Partial<NodeDraft> & { id?: string; images?: string[] }>(
     () => editor?.node ?? { groupId: editor?.presetGroupId ?? null },
     [editor]
+  );
+  // Live images from Firestore — separate from editorInitial so draft fields
+  // don't reset on upload, but the image list stays up to date.
+  const editorNodeImages = useMemo(
+    () => nodes.find((n) => n.id === editor?.node?.id)?.images ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editor?.node?.id, nodes]
   );
 
   const [confirmDel, setConfirmDel] = useState<Node | null>(null);
@@ -312,6 +320,7 @@ function App() {
         open={!!editor}
         isNew={!editor?.node}
         initial={editorInitial}
+        nodeImages={editorNodeImages}
         allNodes={nodes}
         requireNewGroup={editor?.requireNewGroup ?? false}
         onSave={handleSave}
@@ -1043,6 +1052,10 @@ function PathNode({
   const isDone = n.status === "done";
   const isProg = n.status === "in_progress";
   const locked = isLocked(n, allNodes);
+  // Once checklist items exist in the memo, show progress % even if locked.
+  // "All unchecked" becomes 0% rather than reverting to 🔒.
+  const hasChecklist = parseMemoChecklist(n.memo).length > 0;
+  const showLock = locked && !hasChecklist;
   const pct = Math.round(nodeProgress(n) * 100);
 
   // ring color by status (dark theme)
@@ -1050,7 +1063,7 @@ function PathNode({
     ? "ring-emerald-500/60"
     : isProg
     ? "ring-amber-400/60"
-    : locked
+    : showLock
     ? "ring-slate-700"
     : "ring-sky-500/50";
 
@@ -1059,19 +1072,15 @@ function PathNode({
     ? "#34d399"
     : isProg
     ? "#fbbf24"
-    : locked
-    ? "#cbd5e1"
     : "#7dd3fc";
   const waterTo = isDone
     ? "#a7f3d0"
     : isProg
     ? "#fde68a"
-    : locked
-    ? "#e2e8f0"
     : "#bae6fd";
 
   // empty tank background (dark-theme friendly)
-  const tankBg = locked ? "#1a1d29" : "#14171f";
+  const tankBg = showLock ? "#1a1d29" : "#14171f";
 
   const longPress = useLongPress({ onTap, onLongPress });
 
@@ -1122,7 +1131,7 @@ function PathNode({
               background: `linear-gradient(to top, ${waterFrom}, ${waterTo})`,
             }}
             initial={false}
-            animate={{ height: `${locked ? 0 : pct}%` }}
+            animate={{ height: `${showLock ? 0 : pct}%` }}
             transition={{ type: "spring", damping: 22, stiffness: 140 }}
           >
             {/* surface ripple line */}
@@ -1143,7 +1152,7 @@ function PathNode({
           />
           {/* center label */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            {locked ? (
+            {showLock ? (
               <span className="text-2xl">🔒</span>
             ) : (
               <>
@@ -1168,7 +1177,7 @@ function PathNode({
       <div className="mt-2 px-1 w-full text-center pointer-events-none">
         <div
           className={`text-xs font-semibold leading-tight ${
-            locked ? "text-slate-400" : "text-[var(--text-primary)]"
+            showLock ? "text-slate-400" : "text-[var(--text-primary)]"
           }`}
         >
           {n.title}
