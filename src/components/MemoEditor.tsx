@@ -236,6 +236,62 @@ const InlineCheck = Node.create({
       // (insertParagraph / insertLineBreak) so that desktop, iOS and
       // Android all flow through one handler. A keydown handler here
       // would cause a double dispatch on platforms that fire both.
+      //
+      // Backspace: handled here (keydown) for desktop/iOS so that returning
+      // true calls preventDefault on keydown, which suppresses the subsequent
+      // beforeinput event and prevents double-delete. Android soft-keyboard
+      // never fires a "Backspace" keydown, so the beforeinput plugin covers it.
+      Backspace: () => {
+        const { state, view } = this.editor;
+        const { $from, empty } = state.selection;
+        if (!empty) return false;
+
+        let chipDepth = -1;
+        for (let d = $from.depth; d > 0; d--) {
+          if ($from.node(d).type.name === "inlineCheck") {
+            chipDepth = d;
+            break;
+          }
+        }
+
+        if (chipDepth !== -1) {
+          const node = $from.node(chipDepth);
+          const start = $from.start(chipDepth);
+          const text = node.textContent;
+          const effectivelyEmpty = text === "" || text === "​";
+
+          if (effectivelyEmpty) {
+            const before = $from.before(chipDepth);
+            const after = $from.after(chipDepth);
+            const tr = state.tr.delete(before, after);
+            tr.setSelection(TextSelection.create(tr.doc, before));
+            view.dispatch(tr);
+            return true;
+          }
+
+          if ($from.pos > start) {
+            const tr = state.tr.delete($from.pos - 1, $from.pos);
+            view.dispatch(tr);
+            return true;
+          }
+          return false;
+        }
+
+        const nodeBefore = $from.nodeBefore;
+        if (
+          nodeBefore &&
+          nodeBefore.type.name === "inlineCheck" &&
+          (nodeBefore.textContent === "" || nodeBefore.textContent === "​")
+        ) {
+          const before = $from.pos - nodeBefore.nodeSize;
+          const tr = state.tr.delete(before, $from.pos);
+          tr.setSelection(TextSelection.create(tr.doc, before));
+          view.dispatch(tr);
+          return true;
+        }
+
+        return false;
+      },
       ArrowRight: () => {
         const { state, view } = this.editor;
         const { $from, empty } = state.selection;

@@ -51,6 +51,14 @@ function App() {
     showGroupChips?: boolean;
     presetGroupId?: string | null;
   } | null>(null);
+  // Stable reference for NodeEditor's `initial` prop.
+  // Without this, new-node creation produces a fresh object on every Firestore
+  // update, causing NodeEditor's useEffect to reset the draft mid-edit.
+  const editorInitial = useMemo<Partial<NodeDraft> & { id?: string; images?: string[] }>(
+    () => editor?.node ?? { groupId: editor?.presetGroupId ?? null },
+    [editor]
+  );
+
   const [confirmDel, setConfirmDel] = useState<Node | null>(null);
   const [renameTarget, setRenameTarget] = useState<
     {
@@ -303,7 +311,7 @@ function App() {
       <NodeEditor
         open={!!editor}
         isNew={!editor?.node}
-        initial={editor?.node ?? {}}
+        initial={editorInitial}
         allNodes={nodes}
         requireNewGroup={editor?.requireNewGroup ?? false}
         onSave={handleSave}
@@ -319,6 +327,12 @@ function App() {
         onAddGroup={async (title, difficulty) => {
           const id = await ops.addGroup(title, difficulty);
           return id;
+        }}
+        onAddImage={async (nodeId, file) => {
+          await ops.addImage(nodeId, file);
+        }}
+        onRemoveImage={async (nodeId, url) => {
+          await ops.removeImage(nodeId, url);
         }}
       />
 
@@ -675,13 +689,29 @@ function topoSort(ns: Node[]): Node[] {
 }
 
 const NODE_W = 80;
-const COL_W = 280;
-const SPACING = 140;
-const PAD_T = 50;
-const OFFSETS = [0, 56, 0, -56];
+const NODE_R = NODE_W / 2;
+const ROW_H = 160;
+const ROW_PAD_T = 60;
+const COL_PAD_X = 24;
 
-const xOf = (i: number) => COL_W / 2 + OFFSETS[i % 4];
-const yOf = (i: number) => i * SPACING + PAD_T;
+function assignLevels(nodes: Node[]): Map<string, number> {
+  const idSet = new Set(nodes.map((n) => n.id));
+  const memo = new Map<string, number>();
+  const visiting = new Set<string>();
+  function lvl(id: string): number {
+    if (memo.has(id)) return memo.get(id)!;
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
+    const n = nodes.find((x) => x.id === id);
+    const vp = (n?.parents ?? []).filter((p) => idSet.has(p));
+    const l = vp.length === 0 ? 0 : Math.max(...vp.map(lvl)) + 1;
+    visiting.delete(id);
+    memo.set(id, l);
+    return l;
+  }
+  nodes.forEach((n) => lvl(n.id));
+  return memo;
+}
 
 function FocusView({
   nodes: rawNodes,
@@ -697,6 +727,68 @@ function FocusView({
   onAdd: () => void;
 }) {
   const nodes = useMemo(() => topoSort(rawNodes), [rawNodes]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(320);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setContainerW(el.getBoundingClientRect().width || 320);
+    const ro = new ResizeObserver(([e]) =>
+      setContainerW(e.contentRect.width || 320)
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const levels = useMemo(() => assignLevels(nodes), [nodes]);
+  const maxLevel =
+    nodes.length > 0 ? Math.max(...Array.from(levels.values())) : 0;
+
+  const byLevel = useMemo(() => {
+    const map = new Map<number, Node[]>();
+    nodes.forEach((n) => {
+      const l = levels.get(n.id) ?? 0;
+      if (!map.has(l)) map.set(l, []);
+      map.get(l)!.push(n);
+    });
+    return map;
+  }, [nodes, levels]);
+
+  const positions = useMemo(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    const usable = containerW - 2 * COL_PAD_X - NODE_W;
+
+    for (let level = 0; level <= maxLevel; level++) {
+      const ns = byLevel.get(level) ?? [];
+
+      // Sort nodes within each level by average x of their parents
+      // (barycenter heuristic) to minimize edge crossings.
+      const sorted = [...ns].sort((a, b) => {
+        const avgParentX = (n: Node) => {
+          const xs = (n.parents ?? [])
+            .map((pid) => map.get(pid)?.x)
+            .filter((v): v is number => v !== undefined);
+          return xs.length > 0
+            ? xs.reduce((s, v) => s + v, 0) / xs.length
+            : (n.order ?? 0);
+        };
+        return avgParentX(a) - avgParentX(b);
+      });
+
+      const count = sorted.length;
+      sorted.forEach((n, i) => {
+        const x =
+          count === 1
+            ? containerW / 2
+            : COL_PAD_X + NODE_R + (usable > 0 ? (i / (count - 1)) * usable : 0);
+        const y = level * ROW_H + ROW_PAD_T;
+        map.set(n.id, { x, y });
+      });
+    }
+
+    return map;
+  }, [byLevel, containerW, maxLevel]);
 
   if (nodes.length === 0) {
     return (
@@ -718,39 +810,46 @@ function FocusView({
     );
   }
 
-  const idx = new Map(nodes.map((n, i) => [n.id, i]));
-  const totalH = nodes.length * SPACING + PAD_T + 30;
+  const totalH = (maxLevel + 1) * ROW_H + ROW_PAD_T + 60;
 
   type Edge = {
     key: string;
     from: { x: number; y: number };
     to: { x: number; y: number };
     active: boolean;
+    inProgress: boolean;
+    levelSpan: number;
   };
   const edges: Edge[] = [];
-  nodes.forEach((n, i) => {
-    for (const pid of n.parents ?? []) {
-      const pi = idx.get(pid);
-      if (pi === undefined) continue;
-      const parent = nodes[pi];
+  nodes.forEach((n) => {
+    const to = positions.get(n.id);
+    if (!to) return;
+    (n.parents ?? []).forEach((pid) => {
+      const from = positions.get(pid);
+      if (!from) return;
+      const parent = nodes.find((x) => x.id === pid);
+      const levelSpan = (levels.get(n.id) ?? 0) - (levels.get(pid) ?? 0);
       edges.push({
         key: `${pid}-${n.id}`,
-        from: { x: xOf(pi), y: yOf(pi) },
-        to: { x: xOf(i), y: yOf(i) },
-        active: parent.status === "done",
+        from,
+        to,
+        active: parent?.status === "done",
+        inProgress: parent?.status === "in_progress",
+        levelSpan,
       });
-    }
+    });
   });
 
   return (
     <main className="pt-6">
       <div
-        className="relative mx-auto"
-        style={{ width: COL_W, height: totalH }}
+        ref={containerRef}
+        className="relative mx-auto max-w-md"
+        style={{ height: totalH }}
       >
         <svg
           className="absolute inset-0 pointer-events-none"
-          width={COL_W}
+          width={containerW}
           height={totalH}
           style={{ overflow: "visible" }}
         >
@@ -778,6 +877,17 @@ function FocusView({
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#22d3ee" />
             </marker>
             <marker
+              id="arrow-progress"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="5"
+              markerHeight="5"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24" />
+            </marker>
+            <marker
               id="arrow-locked"
               viewBox="0 0 10 10"
               refX="9"
@@ -790,22 +900,41 @@ function FocusView({
             </marker>
           </defs>
           {edges.map((e) => {
-            const r = NODE_W / 2;
-            const startY = e.from.y + r;
-            const endY = e.to.y - r - 6; // small gap so arrowhead doesn't bury into circle
+            const startY = e.from.y + NODE_R;
+            const endY = e.to.y - NODE_R - 6;
             const midY = (startY + endY) / 2;
-            const d = `M ${e.from.x} ${startY} C ${e.from.x} ${midY}, ${e.to.x} ${midY}, ${e.to.x} ${endY}`;
+            // Long edges (spanning >1 level) curve sideways so they don't
+            // visually overlap with nodes or edges at intermediate levels.
+            const longEdgeBow =
+              e.levelSpan > 1
+                ? (e.from.x <= containerW / 2 ? -50 : 50)
+                : 0;
+            const cx1 = e.from.x + longEdgeBow;
+            const cx2 = e.to.x + longEdgeBow;
+            const d = `M ${e.from.x} ${startY} C ${cx1} ${midY}, ${cx2} ${midY}, ${e.to.x} ${endY}`;
+            const markerId = e.active
+              ? "arrow-active"
+              : e.inProgress
+              ? "arrow-progress"
+              : "arrow-locked";
             return (
               <motion.path
                 key={e.key}
                 d={d}
                 fill="none"
-                stroke={e.active ? "url(#line-active)" : "#cbd5e1"}
-                strokeWidth={e.active ? 3.5 : 2.5}
+                stroke={
+                  e.active
+                    ? "url(#line-active)"
+                    : e.inProgress
+                    ? "#fbbf24"
+                    : "#cbd5e1"
+                }
+                strokeWidth={e.active ? 3.5 : e.inProgress ? 3 : 2}
                 strokeLinecap="round"
                 strokeDasharray={e.active ? "0" : "5 6"}
+                strokeOpacity={e.active ? 1 : e.inProgress ? 0.85 : 0.45}
                 filter={e.active ? "url(#line-glow)" : undefined}
-                markerEnd={e.active ? "url(#arrow-active)" : "url(#arrow-locked)"}
+                markerEnd={`url(#${markerId})`}
                 initial={{ pathLength: 0, opacity: 0 }}
                 animate={{ pathLength: 1, opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.1 }}
@@ -813,18 +942,22 @@ function FocusView({
             );
           })}
         </svg>
-        {nodes.map((n, i) => (
-          <PathNode
-            key={n.id}
-            n={n}
-            i={i}
-            x={xOf(i)}
-            y={yOf(i)}
-            allNodes={allNodes}
-            onTap={() => onTap(n)}
-            onLongPress={() => onLongPress(n)}
-          />
-        ))}
+        {nodes.map((n, i) => {
+          const pos = positions.get(n.id);
+          if (!pos) return null;
+          return (
+            <PathNode
+              key={n.id}
+              n={n}
+              i={i}
+              x={pos.x}
+              y={pos.y}
+              allNodes={allNodes}
+              onTap={() => onTap(n)}
+              onLongPress={() => onLongPress(n)}
+            />
+          );
+        })}
       </div>
     </main>
   );
@@ -900,90 +1033,91 @@ function PathNode({
         left: x - 70,
         top: y - NODE_W / 2,
         width: 140,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
       }}
     >
-      <button {...longPress} className="block w-full">
-        <div className="flex flex-col items-center">
-          <div className="relative">
-            {isDone && (
+      {/* Circle button — exactly NODE_W wide so tap targets don't overlap */}
+      <button {...longPress} className="relative block" style={{ width: NODE_W, height: NODE_W }}>
+        {isDone && (
+          <>
+            <motion.div
+              className="absolute inset-0 rounded-full"
+              animate={{
+                boxShadow: [
+                  "0 0 0 0 rgba(52,211,153,0.45)",
+                  "0 0 0 14px rgba(52,211,153,0)",
+                ],
+              }}
+              transition={{ duration: 2.2, repeat: Infinity }}
+            />
+            <span className="quest-stamp">達成</span>
+          </>
+        )}
+        <div
+          className={`relative w-20 h-20 rounded-full overflow-hidden ring-4 shadow-lg ${ringClass}`}
+          style={{ background: tankBg }}
+        >
+          {/* water fill */}
+          <motion.div
+            className="absolute inset-x-0 bottom-0"
+            style={{
+              background: `linear-gradient(to top, ${waterFrom}, ${waterTo})`,
+            }}
+            initial={false}
+            animate={{ height: `${locked ? 0 : pct}%` }}
+            transition={{ type: "spring", damping: 22, stiffness: 140 }}
+          >
+            {/* surface ripple line */}
+            <div
+              className="absolute top-0 inset-x-0 h-[3px]"
+              style={{
+                background: `linear-gradient(to bottom, rgba(255,255,255,0.55), transparent)`,
+              }}
+            />
+          </motion.div>
+          {/* glass highlight */}
+          <div
+            className="absolute inset-0 rounded-full pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.55), rgba(255,255,255,0) 45%)",
+            }}
+          />
+          {/* center label */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            {locked ? (
+              <span className="text-2xl">🔒</span>
+            ) : (
               <>
-                <motion.div
-                  className="absolute inset-0 rounded-full"
-                  animate={{
-                    boxShadow: [
-                      "0 0 0 0 rgba(52,211,153,0.45)",
-                      "0 0 0 14px rgba(52,211,153,0)",
-                    ],
-                  }}
-                  transition={{ duration: 2.2, repeat: Infinity }}
-                />
-                <span className="quest-stamp">達成</span>
+                <span
+                  className={`text-[15px] font-extrabold tabular-nums leading-none drop-shadow-sm ${
+                    isDone || isProg ? "text-white" : "text-sky-300"
+                  }`}
+                >
+                  {pct}%
+                </span>
+                {isDone && (
+                  <span className="text-[10px] text-white/90 mt-0.5 leading-none">
+                    ✓
+                  </span>
+                )}
               </>
             )}
-            <div
-              className={`relative w-20 h-20 rounded-full overflow-hidden ring-4 shadow-lg ${ringClass}`}
-              style={{ background: tankBg }}
-            >
-              {/* water fill */}
-              <motion.div
-                className="absolute inset-x-0 bottom-0"
-                style={{
-                  background: `linear-gradient(to top, ${waterFrom}, ${waterTo})`,
-                }}
-                initial={false}
-                animate={{ height: `${locked ? 0 : pct}%` }}
-                transition={{ type: "spring", damping: 22, stiffness: 140 }}
-              >
-                {/* surface ripple line */}
-                <div
-                  className="absolute top-0 inset-x-0 h-[3px]"
-                  style={{
-                    background: `linear-gradient(to bottom, rgba(255,255,255,0.55), transparent)`,
-                  }}
-                />
-              </motion.div>
-              {/* glass highlight */}
-              <div
-                className="absolute inset-0 rounded-full pointer-events-none"
-                style={{
-                  background:
-                    "radial-gradient(circle at 30% 25%, rgba(255,255,255,0.55), rgba(255,255,255,0) 45%)",
-                }}
-              />
-              {/* center label */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                {locked ? (
-                  <span className="text-2xl">🔒</span>
-                ) : (
-                  <>
-                    <span
-                      className={`text-[15px] font-extrabold tabular-nums leading-none drop-shadow-sm ${
-                        isDone || isProg ? "text-white" : "text-sky-300"
-                      }`}
-                    >
-                      {pct}%
-                    </span>
-                    {isDone && (
-                      <span className="text-[10px] text-white/90 mt-0.5 leading-none">
-                        ✓
-                      </span>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="text-center mt-2 px-1 w-full">
-            <div
-              className={`text-xs font-semibold leading-tight ${
-                locked ? "text-slate-400" : "text-[var(--text-primary)]"
-              }`}
-            >
-              {n.title}
-            </div>
           </div>
         </div>
       </button>
+      {/* Title below — pointer-events-none so it doesn't create a false tap target */}
+      <div className="mt-2 px-1 w-full text-center pointer-events-none">
+        <div
+          className={`text-xs font-semibold leading-tight ${
+            locked ? "text-slate-400" : "text-[var(--text-primary)]"
+          }`}
+        >
+          {n.title}
+        </div>
+      </div>
     </motion.div>
   );
 }

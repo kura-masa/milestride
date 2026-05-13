@@ -15,6 +15,12 @@ import {
   arrayRemove,
   Timestamp,
 } from "firebase/firestore";
+import {
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 import { getFirebase } from "./firebase";
 import { useAuth } from "./auth";
 
@@ -32,6 +38,7 @@ export type Node = {
   position?: { x: number; y: number };
   checklist: ChecklistItem[];
   memo?: string;
+  images?: string[];
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 };
@@ -273,6 +280,31 @@ export function useMutations() {
           }
         }
         await batch.commit();
+      },
+      addImage: async (nodeId: string, file: File): Promise<string> => {
+        const { storage } = getFirebase();
+        const ext = file.name.split(".").pop() ?? "jpg";
+        const path = `users/${uid}/nodes/${nodeId}/${Date.now()}.${ext}`;
+        const sRef = storageRef(storage, path);
+        await uploadBytes(sRef, file);
+        const url = await getDownloadURL(sRef);
+        await updateDoc(doc(db, userPath(uid, "nodes", nodeId)), {
+          images: arrayUnion(url),
+          updatedAt: serverTimestamp(),
+        });
+        return url;
+      },
+      removeImage: async (nodeId: string, url: string) => {
+        const { storage } = getFirebase();
+        await updateDoc(doc(db, userPath(uid, "nodes", nodeId)), {
+          images: arrayRemove(url),
+          updatedAt: serverTimestamp(),
+        });
+        try {
+          await deleteObject(storageRef(storage, url));
+        } catch {
+          // URL形式によっては削除失敗することがある(許容)
+        }
       },
       newChecklistId: newId,
     };

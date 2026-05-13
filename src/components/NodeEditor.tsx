@@ -9,6 +9,7 @@ import {
   parseMemoChecklist,
 } from "@/lib/store";
 import { MemoEditor, MemoEditorHandle } from "./MemoEditor";
+import ImageAttachments from "./ImageAttachments";
 
 export type NodeDraft = {
   title: string;
@@ -28,9 +29,11 @@ export default function NodeEditor({
   onCancel,
   onDelete,
   onAddGroup,
+  onAddImage,
+  onRemoveImage,
 }: {
   open: boolean;
-  initial: Partial<NodeDraft> & { id?: string };
+  initial: Partial<NodeDraft> & { id?: string; images?: string[] };
   allNodes: Node[];
   isNew: boolean;
   requireNewGroup?: boolean;
@@ -38,12 +41,15 @@ export default function NodeEditor({
   onCancel: () => void;
   onDelete?: () => void;
   onAddGroup: (title: string, difficulty: Difficulty) => Promise<string>;
+  onAddImage: (nodeId: string, file: File) => Promise<void>;
+  onRemoveImage: (nodeId: string, url: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<NodeDraft>(() => normalize(initial));
   const [saving, setSaving] = useState(false);
   const [groupNameAtTop, setGroupNameAtTop] = useState("");
   const [groupNameError, setGroupNameError] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>(1);
+  const [fabBottom, setFabBottom] = useState(12);
 
   useEffect(() => {
     if (open) {
@@ -54,7 +60,34 @@ export default function NodeEditor({
     }
   }, [open, initial]);
 
-  const otherNodes = allNodes.filter((n) => n.id !== initial.id);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setFabBottom(kb + 12);
+    };
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    update();
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, [open]);
+
+  // Only show nodes from the same group as potential parents.
+  // Cross-tab parents are never displayed as edges in FocusView anyway, so
+  // including them just creates confusion (same-named nodes look identical).
+  // When the group is known (editing existing node, or new node with a preset
+  // group), restrict to that group. Otherwise show all nodes.
+  const otherNodes = allNodes.filter((n) => {
+    if (n.id === initial.id) return false;
+    const knownGroup = initial.groupId !== undefined;
+    if (knownGroup) return n.groupId === (initial.groupId ?? null);
+    return true;
+  });
 
   const memoEditorRef = useRef<MemoEditorHandle>(null);
 
@@ -112,6 +145,11 @@ export default function NodeEditor({
               >
                 キャンセル
               </button>
+              {!isNew && initial.title && (
+                <span className="flex-1 text-center text-xs font-semibold text-[var(--text-muted)] truncate px-2">
+                  {initial.title}
+                </span>
+              )}
               <div className="flex items-center gap-3">
                 {!isNew && onDelete && (
                   <button
@@ -280,12 +318,20 @@ export default function NodeEditor({
                 />
               </Field>
 
+              <Field label="画像">
+                <ImageAttachments
+                  images={initial.images ?? []}
+                  nodeId={initial.id ?? null}
+                  onAdd={(file) => onAddImage(initial.id!, file)}
+                  onRemove={(url) => onRemoveImage(initial.id!, url)}
+                />
+              </Field>
+
               <div className="h-4" />
             </div>
 
-            {/* Floating "+ 項目を追加" — sticks to the bottom-right of the
-                visible modal area so the user doesn't have to scroll up. */}
-            <div className="sticky bottom-3 z-20 flex justify-end px-4 pointer-events-none">
+            {/* Floating "+ 項目を追加" — fixed above keyboard */}
+            <div className="fixed z-[60] flex justify-end px-4 pointer-events-none" style={{ bottom: fabBottom, left: 0, right: 0 }}>
               <button
                 type="button"
                 aria-label="項目を追加"
@@ -294,9 +340,9 @@ export default function NodeEditor({
                   memoEditorRef.current?.addItem();
                 }}
                 onClick={(e) => e.preventDefault()}
-                className="pointer-events-auto w-12 h-12 rounded-full bg-sky-500 text-white text-2xl font-bold shadow-lg active:bg-sky-600 flex items-center justify-center"
+                className="pointer-events-auto px-3 h-10 rounded-full bg-sky-500 text-white text-sm font-bold shadow-lg active:bg-sky-600 flex items-center justify-center"
               >
-                ＋
+                ＋項目
               </button>
             </div>
           </motion.div>
