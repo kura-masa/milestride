@@ -693,6 +693,8 @@ const NODE_R = NODE_W / 2;
 const ROW_H = 160;
 const ROW_PAD_T = 60;
 const COL_PAD_X = 24;
+const HCOL_SPAN = 140; // horizontal mode: x distance between level columns
+const HROW_SPAN = 110; // horizontal mode: y distance between nodes in same column
 
 function assignLevels(nodes: Node[]): Map<string, number> {
   const idSet = new Set(nodes.map((n) => n.id));
@@ -729,6 +731,7 @@ function FocusView({
   const nodes = useMemo(() => topoSort(rawNodes), [rawNodes]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(320);
+  const [horizontal, setHorizontal] = useState(false);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -755,40 +758,68 @@ function FocusView({
     return map;
   }, [nodes, levels]);
 
+  const maxNodesInLevel = useMemo(
+    () => Math.max(1, ...Array.from(byLevel.values()).map((ns) => ns.length)),
+    [byLevel]
+  );
+
   const positions = useMemo(() => {
     const map = new Map<string, { x: number; y: number }>();
-    const usable = containerW - 2 * COL_PAD_X - NODE_W;
 
-    for (let level = 0; level <= maxLevel; level++) {
-      const ns = byLevel.get(level) ?? [];
-
-      // Sort nodes within each level by average x of their parents
-      // (barycenter heuristic) to minimize edge crossings.
-      const sorted = [...ns].sort((a, b) => {
-        const avgParentX = (n: Node) => {
-          const xs = (n.parents ?? [])
-            .map((pid) => map.get(pid)?.x)
-            .filter((v): v is number => v !== undefined);
-          return xs.length > 0
-            ? xs.reduce((s, v) => s + v, 0) / xs.length
-            : (n.order ?? 0);
-        };
-        return avgParentX(a) - avgParentX(b);
-      });
-
-      const count = sorted.length;
-      sorted.forEach((n, i) => {
-        const x =
-          count === 1
-            ? containerW / 2
-            : COL_PAD_X + NODE_R + (usable > 0 ? (i / (count - 1)) * usable : 0);
-        const y = level * ROW_H + ROW_PAD_T;
-        map.set(n.id, { x, y });
-      });
+    if (horizontal) {
+      const hTotalH = (maxNodesInLevel - 1) * HROW_SPAN + 2 * (NODE_R + 32);
+      for (let level = 0; level <= maxLevel; level++) {
+        const ns = byLevel.get(level) ?? [];
+        const sorted = [...ns].sort((a, b) => {
+          const avgParentY = (n: Node) => {
+            const ys = (n.parents ?? [])
+              .map((pid) => map.get(pid)?.y)
+              .filter((v): v is number => v !== undefined);
+            return ys.length > 0
+              ? ys.reduce((s, v) => s + v, 0) / ys.length
+              : (n.order ?? 0);
+          };
+          return avgParentY(a) - avgParentY(b);
+        });
+        const count = sorted.length;
+        sorted.forEach((n, i) => {
+          const x = NODE_R + 24 + level * HCOL_SPAN;
+          const y =
+            count === 1
+              ? hTotalH / 2
+              : hTotalH / 2 + (i - (count - 1) / 2) * HROW_SPAN;
+          map.set(n.id, { x, y });
+        });
+      }
+    } else {
+      const usable = containerW - 2 * COL_PAD_X - NODE_W;
+      for (let level = 0; level <= maxLevel; level++) {
+        const ns = byLevel.get(level) ?? [];
+        const sorted = [...ns].sort((a, b) => {
+          const avgParentX = (n: Node) => {
+            const xs = (n.parents ?? [])
+              .map((pid) => map.get(pid)?.x)
+              .filter((v): v is number => v !== undefined);
+            return xs.length > 0
+              ? xs.reduce((s, v) => s + v, 0) / xs.length
+              : (n.order ?? 0);
+          };
+          return avgParentX(a) - avgParentX(b);
+        });
+        const count = sorted.length;
+        sorted.forEach((n, i) => {
+          const x =
+            count === 1
+              ? containerW / 2
+              : COL_PAD_X + NODE_R + (usable > 0 ? (i / (count - 1)) * usable : 0);
+          const y = level * ROW_H + ROW_PAD_T;
+          map.set(n.id, { x, y });
+        });
+      }
     }
 
     return map;
-  }, [byLevel, containerW, maxLevel]);
+  }, [byLevel, containerW, maxLevel, horizontal, maxNodesInLevel]);
 
   if (nodes.length === 0) {
     return (
@@ -810,7 +841,10 @@ function FocusView({
     );
   }
 
-  const totalH = (maxLevel + 1) * ROW_H + ROW_PAD_T + 60;
+  const hTotalH = (maxNodesInLevel - 1) * HROW_SPAN + 2 * (NODE_R + 32);
+  const hTotalW = (maxLevel + 1) * HCOL_SPAN + NODE_R + 48;
+  const totalH = horizontal ? hTotalH : (maxLevel + 1) * ROW_H + ROW_PAD_T + 60;
+  const svgW = horizontal ? hTotalW : containerW;
 
   type Edge = {
     key: string;
@@ -842,14 +876,27 @@ function FocusView({
 
   return (
     <main className="pt-6">
+      <div className="flex justify-end px-4 mb-2 max-w-md mx-auto">
+        <button
+          onClick={() => setHorizontal((h) => !h)}
+          className="px-2.5 py-1 rounded-lg text-xs font-semibold ring-1 ring-[var(--ring-soft)] bg-[var(--bg-panel)] text-[var(--text-secondary)] active:bg-[var(--bg-elev)]"
+        >
+          {horizontal ? "↕ 縦" : "↔ 横"}
+        </button>
+      </div>
+      <div className={horizontal ? "overflow-x-auto pb-4" : ""}>
       <div
         ref={containerRef}
-        className="relative mx-auto max-w-md"
-        style={{ height: totalH }}
+        className={horizontal ? "relative" : "relative mx-auto max-w-md"}
+        style={
+          horizontal
+            ? { height: hTotalH, width: hTotalW, minWidth: hTotalW }
+            : { height: totalH }
+        }
       >
         <svg
           className="absolute inset-0 pointer-events-none"
-          width={containerW}
+          width={svgW}
           height={totalH}
           style={{ overflow: "visible" }}
         >
@@ -892,26 +939,38 @@ function FocusView({
               viewBox="0 0 10 10"
               refX="9"
               refY="5"
-              markerWidth="5"
-              markerHeight="5"
+              markerWidth="7"
+              markerHeight="7"
               orient="auto-start-reverse"
             >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
             </marker>
           </defs>
           {edges.map((e) => {
-            const startY = e.from.y + NODE_R;
-            const endY = e.to.y - NODE_R - 6;
-            const midY = (startY + endY) / 2;
-            // Long edges (spanning >1 level) curve sideways so they don't
-            // visually overlap with nodes or edges at intermediate levels.
-            const longEdgeBow =
-              e.levelSpan > 1
-                ? (e.from.x <= containerW / 2 ? -50 : 50)
-                : 0;
-            const cx1 = e.from.x + longEdgeBow;
-            const cx2 = e.to.x + longEdgeBow;
-            const d = `M ${e.from.x} ${startY} C ${cx1} ${midY}, ${cx2} ${midY}, ${e.to.x} ${endY}`;
+            let d: string;
+            if (horizontal) {
+              const startX = e.from.x + NODE_R;
+              const endX = e.to.x - NODE_R - 6;
+              const midX = (startX + endX) / 2;
+              d = `M ${startX} ${e.from.y} C ${midX} ${e.from.y}, ${midX} ${e.to.y}, ${endX} ${e.to.y}`;
+            } else {
+              const startY = e.from.y + NODE_R;
+              const endY = e.to.y - NODE_R - 6;
+              const midY = (startY + endY) / 2;
+              const longEdgeBow =
+                e.levelSpan > 1
+                  ? (e.from.x <= containerW / 2 ? -50 : 50)
+                  : 0;
+              // objectBoundingBox gradient fails on zero-width paths (SVG spec §13.4.2).
+              // Bow vertical edges toward center so the bounding box has nonzero width.
+              const vertBow =
+                e.from.x === e.to.x
+                  ? (e.from.x < containerW / 2 ? 22 : -22)
+                  : 0;
+              const cx1 = e.from.x + longEdgeBow + vertBow;
+              const cx2 = e.to.x + longEdgeBow + vertBow;
+              d = `M ${e.from.x} ${startY} C ${cx1} ${midY}, ${cx2} ${midY}, ${e.to.x} ${endY}`;
+            }
             const markerId = e.active
               ? "arrow-active"
               : e.inProgress
@@ -932,7 +991,7 @@ function FocusView({
                 strokeWidth={e.active ? 3.5 : e.inProgress ? 3 : 2}
                 strokeLinecap="round"
                 strokeDasharray={e.active ? "0" : "5 6"}
-                strokeOpacity={e.active ? 1 : e.inProgress ? 0.85 : 0.45}
+                strokeOpacity={e.active ? 1 : e.inProgress ? 0.85 : 0.7}
                 filter={e.active ? "url(#line-glow)" : undefined}
                 markerEnd={`url(#${markerId})`}
                 initial={{ pathLength: 0, opacity: 0 }}
@@ -958,6 +1017,7 @@ function FocusView({
             />
           );
         })}
+      </div>
       </div>
     </main>
   );
@@ -1017,16 +1077,12 @@ function PathNode({
 
   return (
     <motion.div
-      layoutId={n.id}
       initial={{ scale: 0.6, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={{
-        layout: { type: "spring", damping: 24, stiffness: 220 },
-        default: {
-          delay: Math.min(i * 0.05, 0.4),
-          type: "spring",
-          damping: 16,
-        },
+        delay: Math.min(i * 0.05, 0.4),
+        type: "spring",
+        damping: 16,
       }}
       style={{
         position: "absolute",

@@ -86,9 +86,9 @@ body {
   line-height: 1.2;
 }
 .inline-check.is-checked {
-  background: rgba(52, 211, 153, 0.08);
-  border-color: rgba(52, 211, 153, 0.3);
-  opacity: 0.75;
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.5);
+  opacity: 1;
 }
 .inline-check-box {
   flex: none;
@@ -108,8 +108,8 @@ body {
   user-select: none;
 }
 .inline-check.is-checked .inline-check-box {
-  background: #34d399;
-  border-color: #34d399;
+  background: #fbbf24;
+  border-color: #fbbf24;
   color: #0d0e14;
 }
 .inline-check-label {
@@ -120,8 +120,8 @@ body {
   min-width: 1ch;
 }
 .inline-check.is-checked .inline-check-label {
-  color: var(--text-muted);
-  text-decoration: line-through;
+  color: #fbbf24;
+  text-decoration: none;
 }
 .inline-check.is-empty {
   padding: 0;
