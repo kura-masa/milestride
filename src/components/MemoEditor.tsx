@@ -175,12 +175,10 @@ const InlineCheck = Node.create({
               if (ev.inputType === "deleteContentBackward") {
                 if (chipDepth !== -1) {
                   const node = $from.node(chipDepth);
-                  const start = $from.start(chipDepth);
                   const text = node.textContent;
                   const effectivelyEmpty = text === "" || text === "​";
 
-                  // Effectively empty chip + caret anywhere inside → delete
-                  // the chip itself (this is the "second backspace" case).
+                  // Empty chip → delete the whole chip node
                   if (effectivelyEmpty) {
                     ev.preventDefault();
                     const before = $from.before(chipDepth);
@@ -191,18 +189,13 @@ const InlineCheck = Node.create({
                     return true;
                   }
 
-                  // Chip has real content + caret has chars to its left →
-                  // delete one char and KEEP caret inside (the appendTrans
-                  // will re-insert a ZWS if this empties the chip).
-                  if ($from.pos > start) {
-                    ev.preventDefault();
-                    const tr = view.state.tr.delete(
-                      $from.pos - 1,
-                      $from.pos
-                    );
-                    view.dispatch(tr);
-                    return true;
-                  }
+                  // Non-empty chip: do NOT call preventDefault() here.
+                  // On Android, ev.preventDefault() for deleteContentBackward
+                  // does not suppress the IME's own deletion — both our
+                  // tr.delete and the IME fire, deleting two chars (the one
+                  // to the left AND the one to the right of the caret).
+                  // Returning false lets ProseMirror's built-in handler run,
+                  // which correctly deletes a single character.
                   return false;
                 }
                 // Caret directly after an effectively-empty chip → delete it
@@ -270,7 +263,13 @@ const InlineCheck = Node.create({
         for (let d = $from.depth; d > 0; d--) {
           if ($from.node(d).type.name === "inlineCheck") {
             const start = $from.start(d);
-            if ($from.pos === start) {
+            // An empty chip contains only a ZWS placeholder at position start.
+            // On Android the caret lands at start+1 (after the ZWS) rather than
+            // start, so treat both as "at the beginning" to avoid needing two
+            // ArrowLeft presses to exit.
+            const zwsOnly = $from.node(d).textContent === "​";
+            const atStart = $from.pos === start || (zwsOnly && $from.pos === start + 1);
+            if (atStart) {
               const before = $from.before(d);
               const tr = state.tr.setSelection(
                 TextSelection.create(state.doc, before)
